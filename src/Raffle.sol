@@ -4,14 +4,18 @@ pragma solidity ^0.8.19;
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
+import { IEntropyConsumer } from "@pythnetwork/entropy-sdk-solidity/IEntropyConsumer.sol";
+import { IEntropy } from "@pythnetwork/entropy-sdk-solidity/IEntropy.sol";
 
 /**
  * @title Raffle
  * @notice A gas-optimized raffle contract with refund functionality and minimum ticket requirements
  */
-contract Raffle is ReentrancyGuard, Ownable {
+contract Raffle is IEntropyConsumer, ReentrancyGuard, Ownable {
     // Add constructor to initialize Ownable
-    constructor() Ownable(msg.sender) {}
+    constructor(address entropyAddress) Ownable(msg.sender) {
+        entropy = IEntropy(entropyAddress);
+    }
 
     // Custom errors for gas optimization
     error InvalidDistribution();
@@ -39,6 +43,7 @@ contract Raffle is ReentrancyGuard, Ownable {
         uint32 minTicketsRequired;
         uint32 totalSold;
         uint32 availableTickets;
+        uint64 sequenceNumber;
         bool isActive;
         bool isFinalized;
         bool isNull;
@@ -53,12 +58,15 @@ contract Raffle is ReentrancyGuard, Ownable {
 
     // State variables
     mapping(uint256 => RaffleInfo) public raffles;
+    mapping(uint256 => uint256) public sequenceNumberToRaffleId;
     uint256 public raffleCounter;
+    IEntropy public entropy;
 
     // Events
     event RaffleCreated(uint256 indexed raffleId, address creator, uint256 totalTickets);
     event TicketsPurchased(uint256 indexed raffleId, address indexed buyer, uint256 quantity);
     event TicketRefunded(uint256 indexed raffleId, address indexed user, uint256 ticketId);
+    event SequenceNumberRequested(uint256 indexed raffleId, uint64 sequenceNumber);
     event RaffleFinalized(uint256 indexed raffleId, uint256 randomSeed);
     event RaffleDeclaredNull(uint256 indexed raffleId);
     event PrizeClaimed(uint256 indexed raffleId, address indexed winner, uint256 amount);
@@ -187,7 +195,7 @@ contract Raffle is ReentrancyGuard, Ownable {
      * @notice Finalize the raffle and determine winners
      * @param raffleId ID of the raffle
      */
-    function finalizeRaffle(uint256 raffleId) external {
+    function finalizeRaffle(uint256 raffleId) external payable {
         RaffleInfo storage raffle = raffles[raffleId];
         
         if (block.number < raffle.endBlock) revert RaffleNotEnded();
@@ -202,20 +210,48 @@ contract Raffle is ReentrancyGuard, Ownable {
         }
 
         // TODO: generate random seed using pyth oracle
-        uint256 randomSeed = uint256(keccak256(abi.encodePacked(
+        bytes32 randomSeed = keccak256(abi.encodePacked(
             blockhash(block.number - 1),
             block.timestamp,
             raffle.totalSold
-        )));
+        ));
 
+        address entropyProvider = entropy.getDefaultProvider();
+        uint256 fee = entropy.getFee(entropyProvider);
+ 
+        uint64 sequenceNumber = entropy.requestWithCallback{ value: fee }(
+            entropyProvider,
+            randomSeed
+        );
+
+        raffle.sequenceNumber = sequenceNumber;
+        sequenceNumberToRaffleId[sequenceNumber] = raffleId;
+
+        raffle.isActive = false;
+        emit SequenceNumberRequested(raffleId, sequenceNumber);
+    }
+
+    /** 
+     * @param sequenceNumber The sequence number of the request.
+     * @param provider The address of the provider that generated the random number. If your app uses multiple providers, you can use this argument to distinguish which one is calling the app back.
+     * @param randomNumber The generated random number.
+     **/
+    function entropyCallback(
+        uint64 sequenceNumber,
+        address provider,
+        bytes32 randomNumber
+    ) internal override {
+        uint256 raffleId = sequenceNumberToRaffleId[sequenceNumber];
+        RaffleInfo storage raffle = raffles[raffleId];
+
+        uint256 randomSeed = uint256(randomNumber);
         _selectWinners(raffleId, randomSeed);
         
-        raffle.isActive = false;
         raffle.isFinalized = true;
 
         emit RaffleFinalized(raffleId, randomSeed);
     }
-
+    
     /**
      * @notice Internal function to select winners
      * @param raffleId ID of the raffle
@@ -392,5 +428,11 @@ contract Raffle is ReentrancyGuard, Ownable {
             raffle.isFinalized,
             raffle.isNull
         );
+    }
+
+    // This method is required by the IEntropyConsumer interface.
+    // It returns the address of the entropy contract which will call the callback.
+    function getEntropy() internal view override returns (address) {
+        return address(entropy);
     }
 }

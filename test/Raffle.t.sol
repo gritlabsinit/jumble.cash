@@ -11,14 +11,16 @@ contract RaffleTest is Test {
     address public owner;
     address public user1;
     address public user2;
+    address public entropyAddress;
 
     function setUp() public {
         owner = address(this);
         user1 = makeAddr("user1");
         user2 = makeAddr("user2");
-        
+        entropyAddress = makeAddr("entropy");
+
         token = new MockERC20();
-        raffle = new Raffle();
+        raffle = new Raffle(entropyAddress);
 
         // Fund test accounts
         token.transfer(user1, 1000 * 10**18);

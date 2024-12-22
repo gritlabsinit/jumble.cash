@@ -33,6 +33,26 @@ A gas-optimized raffle system built on Ethereum, featuring a Solidity smart cont
 forge install
 ```
 
+### Scripts
+
+#### Deploy Contracts
+The `deploy_contracts.py` script helps deploy and verify contracts on different networks:
+
+```
+source .env && ./deploy_contracts.sh
+```
+
+#### Generate ABIs
+The `gen_abi.py` script extracts and formats contract ABIs:
+
+bash
+Generate ABIs for all contracts
+python3 scripts/gen_abi.py
+The script will:
+1. Read contract artifacts from the out/ directory
+2. Extract ABIs
+3. Save them to src/abi/ directory
+
 # Run tests
 ```
 forge test

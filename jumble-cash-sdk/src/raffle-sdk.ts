@@ -32,6 +32,11 @@ interface RaffleLog {
     data: string;
 }
 
+interface SequenceNumberRequestedEvent {
+    raffleId: bigint;
+    sequenceNumber: bigint;
+}
+
 export class RaffleSdk {
     private provider: ethers.Provider;
     private signer: ethers.Signer;
@@ -148,12 +153,14 @@ export class RaffleSdk {
         }
     }
 
-    async finalizeRaffle(raffleId: number): Promise<RaffleFinalizationEvent | null> {
+    async finalizeRaffle(raffleId: number): Promise<SequenceNumberRequestedEvent | null> {
         try {
-            const tx = await this.raffleContract.finalizeRaffle(raffleId);
+            const tx = await this.raffleContract.finalizeRaffle(raffleId, {
+                value: ethers.parseEther("0.0001")
+            });
             const receipt = await tx.wait();
 
-            // Parse either RaffleFinalized or RaffleDeclaredNull event
+            // Parse SequenceNumberRequested event
             const event = receipt?.logs
                 .filter((log: RaffleLog) => log.address === this.raffleContractAddress)
                 .map((log: RaffleLog) => {
@@ -166,23 +173,16 @@ export class RaffleSdk {
                         return null;
                     }
                 })
-                .find((event: ethers.LogDescription | null) => ['RaffleFinalized', 'RaffleDeclaredNull'].includes(event?.name || ''));
+                .find((event: ethers.LogDescription | null) => event?.name === 'SequenceNumberRequested');
 
             if (!event) {
-                console.warn('Finalization event not found in transaction receipt');
+                console.warn('SequenceNumberRequested event not found in transaction receipt');
                 return null;
-            }
-
-            if (event.name === 'RaffleFinalized') {
-                return {
-                    raffleId: event.args[0],
-                    randomSeed: event.args[1]
-                };
             }
 
             return {
                 raffleId: event.args[0],
-                randomSeed: BigInt(0) // No random seed for null raffles
+                sequenceNumber: event.args[1]
             };
         } catch (error) {
             console.error('Error finalizing raffle:', error);

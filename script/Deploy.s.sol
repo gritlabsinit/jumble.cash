@@ -8,7 +8,8 @@ import {MockERC20} from "../src/MockERC20.sol";
 contract DeployScript is Script {
     function run() external returns (Raffle raffle, MockERC20 token) {
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
-        
+        address entropyAddress = vm.envAddress("ENTROPY_ADDRESS");
+
         vm.startBroadcast(deployerPrivateKey);
         
         // Deploy token first
@@ -16,7 +17,7 @@ contract DeployScript is Script {
         console2.log("TOKEN_ADDRESS=%s", address(token));
         
         // Deploy Raffle contract
-        raffle = new Raffle();
+        raffle = new Raffle(entropyAddress);
         console2.log("RAFFLE_ADDRESS=%s", address(raffle));
         
         vm.stopBroadcast();

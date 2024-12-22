@@ -1,0 +1,5 @@
+{
+  "dependencies": {
+    "@pythnetwork/entropy-sdk-solidity": "^1.5.0"
+  }
+}

@@ -33,15 +33,16 @@ async function main() {
     try {
         // Create a new raffle
         const distribution = [
-            { fundPercentage: 70, ticketQuantity: 1 },
-            { fundPercentage: 30, ticketQuantity: 2 }
+            { fundPercentage: 70, ticketQuantity: 2 },
+            { fundPercentage: 20, ticketQuantity: 5 },
+            { fundPercentage: 10, ticketQuantity: 3 }
         ];
 
         const raffleEvent = await raffleSdk.createRaffle(
-            3, // totalTickets
+            10, // totalTickets
             ethers.parseEther('1'), // 1 token per ticket
             distribution,
-            3, // duration in blocks
+            10, // duration in blocks
             2 // minTicketsRequired
         );
 
@@ -52,13 +53,13 @@ async function main() {
         });
 
         // Buy tickets
-        const purchaseEvent = await raffleSdk.buyTickets(Number(raffleEvent?.raffleId), 2);
+        const purchaseEvent = await raffleSdk.buyTickets(Number(raffleEvent?.raffleId), 4);
         console.log('Bought tickets:', {
             raffleId: purchaseEvent?.raffleId.toString(),
             buyer: purchaseEvent?.buyer,
             quantity: purchaseEvent?.quantity.toString()
         });
-
+        
         // Wait for raffle duration
         const raffleInfo = await raffleSdk.getRaffleInfo(Number(raffleEvent?.raffleId));
         const currentBlock = await provider.getBlockNumber();
@@ -73,7 +74,7 @@ async function main() {
         const finalizationEvent = await raffleSdk.finalizeRaffle(Number(raffleEvent?.raffleId));
         console.log('Finalized raffle:', {
             raffleId: finalizationEvent?.raffleId.toString(),
-            randomSeed: finalizationEvent?.randomSeed.toString()
+            randomSeed: finalizationEvent?.sequenceNumber.toString()
         });
 
         // Claim prize
