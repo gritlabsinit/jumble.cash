@@ -13,6 +13,6 @@ docs/
 # Dotenv file
 .env
 lib/
-jump-cash-sdk/node_modules/
-jump-cash-sdk/dist/
-jump-cash-sdk/.env
+jumble-cash-sdk/node_modules/
+jumble-cash-sdk/dist/
+jumble-cash-sdk/.env
