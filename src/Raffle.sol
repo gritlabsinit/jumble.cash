@@ -2,7 +2,7 @@
 pragma solidity ^0.8.19;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
 /**
@@ -10,6 +10,9 @@ import "@openzeppelin/contracts/access/Ownable.sol";
  * @notice A gas-optimized raffle contract with refund functionality and minimum ticket requirements
  */
 contract Raffle is ReentrancyGuard, Ownable {
+    // Add constructor to initialize Ownable
+    constructor() Ownable(msg.sender) {}
+
     // Custom errors for gas optimization
     error InvalidDistribution();
     error RaffleNotActive();
@@ -120,8 +123,12 @@ contract Raffle is ReentrancyGuard, Ownable {
         
         if (!raffle.isActive || block.number >= raffle.endBlock) revert RaffleNotActive();
         if (raffle.availableTickets < quantity) revert InsufficientTickets();
+        if (quantity == 0) revert InvalidTicketId();
 
-        uint256 totalCost = uint256(quantity) * raffle.ticketTokenQuantity;
+        // Safe multiplication check
+        uint256 ticketCost = raffle.ticketTokenQuantity;
+        if (ticketCost > type(uint256).max / quantity) revert("Arithmetic overflow");
+        uint256 totalCost = quantity * ticketCost;
         
         // Transfer tokens first to prevent reentrancy
         IERC20(raffle.ticketToken).transferFrom(msg.sender, address(this), totalCost);
@@ -135,15 +142,21 @@ contract Raffle is ReentrancyGuard, Ownable {
                 raffle.ticketOwners[i] = msg.sender;
                 raffle.userTickets[msg.sender].push(i);
                 raffle.isTicketRefunded[i] = false;
-                unchecked { ++ticketsAssigned; }
+                ticketsAssigned++;
             }
-            unchecked { ++i; }
+            i++;
         }
         
-        unchecked {
-            raffle.availableTickets -= quantity;
-            raffle.totalSold += quantity;
-        }
+        // Check if we assigned all tickets
+        if (ticketsAssigned != quantity) revert("Failed to assign all tickets");
+        
+        // Safe arithmetic operations
+        if (raffle.availableTickets < quantity) revert InsufficientTickets();
+        raffle.availableTickets -= quantity;
+        
+        uint32 newTotalSold = raffle.totalSold + quantity;
+        if (newTotalSold < raffle.totalSold) revert("Overflow in totalSold");
+        raffle.totalSold = newTotalSold;
         
         emit TicketsPurchased(raffleId, msg.sender, quantity);
     }
@@ -188,6 +201,7 @@ contract Raffle is ReentrancyGuard, Ownable {
             return;
         }
 
+        // TODO: generate random seed using pyth oracle
         uint256 randomSeed = uint256(keccak256(abi.encodePacked(
             blockhash(block.number - 1),
             block.timestamp,
@@ -210,6 +224,7 @@ contract Raffle is ReentrancyGuard, Ownable {
     function _selectWinners(uint256 raffleId, uint256 randomSeed) internal {
         RaffleInfo storage raffle = raffles[raffleId];
         
+        // Create array of valid tickets
         uint256[] memory availableTickets = new uint256[](raffle.totalSold);
         uint256 availableIndex;
         
@@ -230,22 +245,33 @@ contract Raffle is ReentrancyGuard, Ownable {
         for (uint256 i = 0; i < raffle.ticketDistribution.length;) {
             uint256 winnersCount = raffle.ticketDistribution[i].ticketQuantity;
             
-            if (raffle.ticketDistribution[i].fundPercentage > 0) {
-                for (uint256 j = 0; j < winnersCount;) {
-                    currentSeed = uint256(keccak256(abi.encodePacked(currentSeed, j)));
-                    uint256 winnerIndex = processedTickets + (currentSeed % (raffle.totalSold - processedTickets));
-                    
-                    // Swap and select winner
-                    uint256 temp = availableTickets[processedTickets];
-                    availableTickets[processedTickets] = availableTickets[winnerIndex];
-                    availableTickets[winnerIndex] = temp;
-                    
-                    raffle.winningTicketsPerPool[i].push(availableTickets[processedTickets]);
-                    
-                    unchecked { 
-                        ++processedTickets;
-                        ++j;
-                    }
+            // Skip if no winners in this pool or no percentage allocated
+            if (winnersCount == 0 || raffle.ticketDistribution[i].fundPercentage == 0) {
+                unchecked { ++i; }
+                continue;
+            }
+
+            // Make sure we don't try to select more winners than available tickets
+            uint256 remainingTickets = raffle.totalSold - processedTickets;
+            if (remainingTickets == 0) break;
+            
+            // Adjust winners count if needed
+            winnersCount = winnersCount > remainingTickets ? remainingTickets : winnersCount;
+
+            for (uint256 j = 0; j < winnersCount;) {
+                currentSeed = uint256(keccak256(abi.encodePacked(currentSeed, j)));
+                uint256 winnerIndex = processedTickets + (currentSeed % (raffle.totalSold - processedTickets));
+                
+                // Swap and select winner
+                uint256 temp = availableTickets[processedTickets];
+                availableTickets[processedTickets] = availableTickets[winnerIndex];
+                availableTickets[winnerIndex] = temp;
+                
+                raffle.winningTicketsPerPool[i].push(availableTickets[processedTickets]);
+                
+                unchecked { 
+                    ++processedTickets;
+                    ++j;
                 }
             }
             unchecked { ++i; }

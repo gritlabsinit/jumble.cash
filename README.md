@@ -1,66 +1,97 @@
-## Foundry
+# Raffle Smart Contract System
 
-**Foundry is a blazing fast, portable and modular toolkit for Ethereum application development written in Rust.**
+A gas-optimized raffle system built on Ethereum, featuring a Solidity smart contract and TypeScript SDK for easy integration.
 
-Foundry consists of:
+## Features
 
--   **Forge**: Ethereum testing framework (like Truffle, Hardhat and DappTools).
--   **Cast**: Swiss army knife for interacting with EVM smart contracts, sending transactions and getting chain data.
--   **Anvil**: Local Ethereum node, akin to Ganache, Hardhat Network.
--   **Chisel**: Fast, utilitarian, and verbose solidity REPL.
+- Create raffles with customizable ticket distributions and prize pools
+- Purchase tickets using ERC20 tokens
+- Refund functionality for individual tickets
+- Minimum ticket requirements for raffle completion
+- Automated winner selection using block-based randomness
+- Prize claiming system with multiple prize pools
+- TypeScript SDK for easy contract interaction
 
-## Documentation
+## Project Structure
 
-https://book.getfoundry.sh/
+- `src/Raffle.sol`: The main Raffle contract.
+- `src/MockERC20.sol`: A mock ERC20 token for testing purposes.
+- `test/Raffle.t.sol`: Test cases for the Raffle contract.
+- `jump-cash-sdk/src/raffle-sdk.ts`: TypeScript SDK for interacting with the Raffle contract.
+- `jump-cash-sdk/examples/complete-flow.ts`: Example usage of the SDK.
 
-## Usage
+## Getting Started
 
-### Build
+1. Clone the repository
+2. Install dependencies
+3. Run the tests
+4. Use the SDK to interact with the Raffle contract 
 
-```shell
-$ forge build
+
+# Install Solidity dependencies
+```
+forge install
 ```
 
-### Test
+# Run tests
+```
+forge test
+``` 
 
-```shell
-$ forge test
+# Run tests with coverage
+```
+forge coverage
+```     
+
+
+## Deployment
+
+1. Deploy the contracts:
+```
+forge script script/Deploy.s.sol:Deploy --rpc-url <your_rpc_url> --private-key <your_private_key>
 ```
 
-### Format
-
-```shell
-$ forge fmt
+2. Interact with the contracts using the SDK:
+```
+npm run jump-cash-sdk/examples
 ```
 
-### Gas Snapshots
 
-```shell
-$ forge snapshot
-```
+See `ts/examples/complete-flow.ts` for a complete usage example.
 
-### Anvil
+## Contract Features
 
-```shell
-$ anvil
-```
+### Raffle Creation
+- Set total number of tickets
+- Define ticket price in ERC20 tokens
+- Configure prize distribution across multiple pools
+- Set minimum ticket requirements
+- Set raffle duration in blocks
 
-### Deploy
+### Ticket Management
+- Purchase multiple tickets
+- Refund individual tickets
+- Track ticket ownership
+- View user tickets
 
-```shell
-$ forge script script/Counter.s.sol:CounterScript --rpc-url <your_rpc_url> --private-key <your_private_key>
-```
+### Raffle Finalization
+- Automatic winner selection
+- Multiple prize pools
+- Null raffle handling
+- Prize claiming system
 
-### Cast
+## Security Features
 
-```shell
-$ cast <subcommand>
-```
+- Reentrancy protection
+- Safe math operations
+- Owner controls
+- Gas optimization
+- Proper event emission
 
-### Help
+## Contributing
 
-```shell
-$ forge --help
-$ anvil --help
-$ cast --help
-```
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
