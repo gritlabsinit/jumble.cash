@@ -1,6 +1,8 @@
 import { ethers } from 'ethers';
 import { RaffleABI } from './abi/Raffle';
 import { ERC20ABI } from './abi/ERC20';
+import { ErrorDecoder } from 'ethers-decode-error'
+import type { DecodedError } from 'ethers-decode-error'
 
 interface RaffleEvent {
     raffleId: bigint;
@@ -25,13 +27,6 @@ interface PrizeClaimedEvent {
     amount: bigint;
 }
 
-// First, let's define an interface for the log structure
-interface RaffleLog {
-    address: string;
-    topics: string[];
-    data: string;
-}
-
 interface SequenceNumberRequestedEvent {
     raffleId: bigint;
     sequenceNumber: bigint;
@@ -43,6 +38,7 @@ export class RaffleSdk {
     private raffleContract: ethers.Contract;
     private tokenContract: ethers.Contract;
     private raffleContractAddress: string;
+    private errorDecoder: ErrorDecoder;
 
     constructor(
         provider: ethers.Provider,
@@ -55,6 +51,7 @@ export class RaffleSdk {
         this.raffleContract = new ethers.Contract(raffleAddress, RaffleABI, signer);
         this.tokenContract = new ethers.Contract(tokenAddress, ERC20ABI, signer);
         this.raffleContractAddress = raffleAddress;
+        this.errorDecoder = ErrorDecoder.create([RaffleABI, ERC20ABI]);
     }
 
     async createRaffle(
@@ -74,22 +71,8 @@ export class RaffleSdk {
                 minTicketsRequired
             );
             const receipt = await tx.wait();
-
-            // Parse the RaffleCreated event
-            const event = receipt?.logs
-                .filter((log: RaffleLog) => log.address === this.raffleContractAddress)
-                .map((log: RaffleLog) => {
-                    try {
-                        return this.raffleContract.interface.parseLog({
-                            topics: log.topics,
-                            data: log.data
-                        });
-                    } catch (e) {
-                        return null;
-                    }
-                })
-                .find((event: ethers.LogDescription | null) => event?.name === 'RaffleCreated');
-
+            const event = this.parseEvent(receipt, 'RaffleCreated');
+            
             if (!event) {
                 console.warn('RaffleCreated event not found in transaction receipt');
                 return null;
@@ -101,8 +84,9 @@ export class RaffleSdk {
                 totalTickets: event.args[2]
             };
         } catch (error) {
-            console.error('Error creating raffle:', error);
-            throw error;
+            const decodedError: DecodedError = await this.errorDecoder.decode(error)          
+            console.error('Error creating raffle:', decodedError);
+            throw decodedError;
         }
     }
 
@@ -121,22 +105,8 @@ export class RaffleSdk {
             // Buy tickets
             const tx = await this.raffleContract.buyTickets(raffleId, quantity);
             const receipt = await tx.wait();
-
-            // Parse the TicketsPurchased event
-            const event = receipt?.logs
-                .filter((log: RaffleLog) => log.address === this.raffleContractAddress)
-                .map((log: RaffleLog) => {
-                    try {
-                        return this.raffleContract.interface.parseLog({
-                            topics: log.topics,
-                            data: log.data
-                        });
-                    } catch (e) {
-                        return null;
-                    }
-                })
-                .find((event: ethers.LogDescription | null) => event?.name === 'TicketsPurchased');
-
+            const event = this.parseEvent(receipt, 'TicketsPurchased');
+            
             if (!event) {
                 console.warn('TicketsPurchased event not found in transaction receipt');
                 return null;
@@ -148,33 +118,21 @@ export class RaffleSdk {
                 quantity: event.args[2]
             };
         } catch (error) {
-            console.error('Error buying tickets:', error);
-            throw error;
+            const decodedError: DecodedError = await this.errorDecoder.decode(error)          
+            console.error('Error buying tickets:', decodedError);
+            throw decodedError;
         }
     }
 
     async finalizeRaffle(raffleId: number): Promise<SequenceNumberRequestedEvent | null> {
         try {
+            const sequenceFees = await this.getSequenceFees();
             const tx = await this.raffleContract.finalizeRaffle(raffleId, {
-                value: ethers.parseEther("0.0001")
+                value: ethers.parseEther(ethers.formatEther(sequenceFees))
             });
             const receipt = await tx.wait();
-
-            // Parse SequenceNumberRequested event
-            const event = receipt?.logs
-                .filter((log: RaffleLog) => log.address === this.raffleContractAddress)
-                .map((log: RaffleLog) => {
-                    try {
-                        return this.raffleContract.interface.parseLog({
-                            topics: log.topics,
-                            data: log.data
-                        });
-                    } catch (e) {
-                        return null;
-                    }
-                })
-                .find((event: ethers.LogDescription | null) => event?.name === 'SequenceNumberRequested');
-
+            const event = this.parseEvent(receipt, 'SequenceNumberRequested');
+            
             if (!event) {
                 console.warn('SequenceNumberRequested event not found in transaction receipt');
                 return null;
@@ -185,8 +143,9 @@ export class RaffleSdk {
                 sequenceNumber: event.args[1]
             };
         } catch (error) {
-            console.error('Error finalizing raffle:', error);
-            throw error;
+            const decodedError: DecodedError = await this.errorDecoder.decode(error)          
+            console.error('Error finalizing raffle:', decodedError);
+            throw decodedError;
         }
     }
 
@@ -194,22 +153,8 @@ export class RaffleSdk {
         try {
             const tx = await this.raffleContract.claimPrize(raffleId);
             const receipt = await tx.wait();
-
-            // Parse the PrizeClaimed event
-            const event = receipt?.logs
-                .filter((log: RaffleLog) => log.address === this.raffleContractAddress)
-                .map((log: RaffleLog) => {
-                    try {
-                        return this.raffleContract.interface.parseLog({
-                            topics: log.topics,
-                            data: log.data
-                        });
-                    } catch (e) {
-                        return null;
-                    }
-                })
-                .find((event: ethers.LogDescription | null) => event?.name === 'PrizeClaimed');
-
+            const event = this.parseEvent(receipt, 'PrizeClaimed');
+            
             if (!event) {
                 console.warn('PrizeClaimed event not found in transaction receipt');
                 return null;
@@ -221,27 +166,11 @@ export class RaffleSdk {
                 amount: event.args[2]
             };
         } catch (error) {
-            console.error('Error claiming prize:', error);
-            throw error;
+            const decodedError: DecodedError = await this.errorDecoder.decode(error)          
+            console.error('Error claiming prize:', decodedError);
+            throw decodedError;
         }
     }
-
-    // // Helper method to parse events
-    // private parseEvent(receipt: ethers.ContractTransactionReceipt, eventName: string) {
-    //     return receipt?.logs
-    //         .filter((log: RaffleLog) => log.address === this.raffleContractAddress)
-    //         .map((log: RaffleLog) => {
-    //             try {
-    //                 return this.raffleContract.interface.parseLog({
-    //                     topics: log.topics,
-    //                     data: log.data
-    //                 });
-    //             } catch (e) {
-    //                 return null;
-    //             }
-    //         })
-    //         .find((event: ethers.LogDescription | null) => event?.name === eventName);
-    // }
 
     async refundTicket(raffleId: number, ticketId: number) {
         try {
@@ -249,8 +178,9 @@ export class RaffleSdk {
             const receipt = await tx.wait();
             return receipt;
         } catch (error) {
-            console.error('Error refunding ticket:', error);
-            throw error;
+            const decodedError: DecodedError = await this.errorDecoder.decode(error)          
+            console.error('Error refunding ticket:', decodedError);
+            throw decodedError;
         }
     }
 
@@ -292,4 +222,31 @@ export class RaffleSdk {
             throw error;
         }
     }
+
+    async getSequenceFees() {
+        try {
+            return await this.raffleContract.getSequenceFees();
+        } catch (error) {
+            console.error('Error getting sequence fees:', error);
+            throw error;
+        }
+    }
+
+    // Helper method to parse events
+    private parseEvent(receipt: ethers.ContractTransactionReceipt, eventName: string) {
+        return receipt?.logs
+            .filter((log: ethers.Log) => log.address === this.raffleContractAddress)
+            .map((log: ethers.Log) => {
+                try {
+                    return this.raffleContract.interface.parseLog({
+                        topics: log.topics,
+                        data: log.data
+                    });
+                } catch (e) {
+                    return null;
+                }
+            })
+            .find((event: ethers.LogDescription | null) => event?.name === eventName);
+    }
+    
 } 

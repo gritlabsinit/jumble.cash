@@ -77,6 +77,11 @@ async function main() {
             randomSeed: finalizationEvent?.sequenceNumber.toString()
         });
 
+        console.log(`Waiting for ${blocksToWait} blocks...`);
+        // In real application, you would wait for the actual blocks
+        // This is just for demonstration
+        await new Promise(resolve => setTimeout(resolve, blocksToWait * 12000));
+
         // Claim prize
         const claimEvent = await raffleSdk.claimPrize(Number(raffleEvent?.raffleId));
         console.log('Claimed prize:', {

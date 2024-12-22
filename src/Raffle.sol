@@ -435,4 +435,8 @@ contract Raffle is IEntropyConsumer, ReentrancyGuard, Ownable {
     function getEntropy() internal view override returns (address) {
         return address(entropy);
     }
+
+    function getSequenceFees() external view returns (uint256) {
+        return entropy.getFee(entropy.getDefaultProvider());
+    }
 }
