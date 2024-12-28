@@ -23,8 +23,8 @@ A gas-optimized raffle system built on Ethereum, featuring a Solidity smart cont
 ## Deployed Contracts
 
 ### Base Sepolia
-- **Raffle Contract**: [`0xae310CF0cB825dE4d5945f38D7E2DAa842BF4326`](https://sepolia.basescan.org/address/0xae310CF0cB825dE4d5945f38D7E2DAa842BF4326)
-- **Token Contract**: [`0x9043cbF791eBAc0E1339e503838346e5fbcdddF8`](https://sepolia.basescan.org/address/0x9043cbF791eBAc0E1339e503838346e5fbcdddF8)
+- **Raffle Contract**: [`0x3969FAb094BE423F1aaD8B5a6CC0B227Ddd64Ac5`](https://sepolia.basescan.org/address/0x3969FAb094BE423F1aaD8B5a6CC0B227Ddd64Ac5)
+- **Token Contract**: [`0x93999471865710Caa13896580D7a669D3D9f7E69`](https://sepolia.basescan.org/address/0x93999471865710Caa13896580D7a669D3D9f7E69)
 
 ## Getting Started
 

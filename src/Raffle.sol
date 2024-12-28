@@ -13,8 +13,13 @@ import { IEntropy } from "@pythnetwork/entropy-sdk-solidity/IEntropy.sol";
  */
 contract Raffle is IEntropyConsumer, ReentrancyGuard, Ownable {
     // Add constructor to initialize Ownable
-    constructor(address entropyAddress) Ownable(msg.sender) {
+    constructor(address entropyAddress, address _feeCollector, uint256 _feePercentage) 
+        Ownable(msg.sender) 
+    {
         entropy = IEntropy(entropyAddress);
+        feeCollector = _feeCollector;
+        require(_feePercentage <= 1000, "Fee cannot exceed 10%"); // Max 10% fee
+        feePercentage = _feePercentage;
     }
 
     // Custom errors for gas optimization
@@ -38,6 +43,7 @@ contract Raffle is IEntropyConsumer, ReentrancyGuard, Ownable {
 
     struct RaffleInfo {
         address ticketToken;
+        uint256 feeCollected;
         uint96 ticketTokenQuantity;
         uint32 endBlock;
         uint32 minTicketsRequired;
@@ -61,6 +67,8 @@ contract Raffle is IEntropyConsumer, ReentrancyGuard, Ownable {
     mapping(uint256 => uint256) public sequenceNumberToRaffleId;
     uint256 public raffleCounter;
     IEntropy public entropy;
+    uint256 public feePercentage; // In basis points (e.g., 250 = 2.50%)
+    address public feeCollector;
 
     // Events
     event RaffleCreated(uint256 indexed raffleId, address creator, uint256 totalTickets);
@@ -70,6 +78,7 @@ contract Raffle is IEntropyConsumer, ReentrancyGuard, Ownable {
     event RaffleFinalized(uint256 indexed raffleId, uint256 randomSeed);
     event RaffleDeclaredNull(uint256 indexed raffleId);
     event PrizeClaimed(uint256 indexed raffleId, address indexed winner, uint256 amount);
+    event FeeCollected(uint256 indexed raffleId, uint256 amount);
 
     /**
      * @notice Creates a new raffle
@@ -209,19 +218,22 @@ contract Raffle is IEntropyConsumer, ReentrancyGuard, Ownable {
             return;
         }
 
-        // TODO: generate random seed using pyth oracle
-        bytes32 randomSeed = keccak256(abi.encodePacked(
-            blockhash(block.number - 1),
-            block.timestamp,
-            raffle.totalSold
-        ));
+        // Calculate and transfer fees
+        uint256 totalPoolAmount = uint256(raffle.totalSold) * raffle.ticketTokenQuantity;
+        uint256 feeAmount = (totalPoolAmount * feePercentage) / 10000;
+        
+        if (feeAmount > 0) {
+            IERC20(raffle.ticketToken).transfer(feeCollector, feeAmount);
+            raffle.feeCollected = feeAmount; // Store fee amount for reference
+        }
 
+        // Request random number
         address entropyProvider = entropy.getDefaultProvider();
         uint256 fee = entropy.getFee(entropyProvider);
  
         uint64 sequenceNumber = entropy.requestWithCallback{ value: fee }(
             entropyProvider,
-            randomSeed
+            keccak256(abi.encodePacked(blockhash(block.number - 1), block.timestamp))
         );
 
         raffle.sequenceNumber = sequenceNumber;
@@ -329,7 +341,8 @@ contract Raffle is IEntropyConsumer, ReentrancyGuard, Ownable {
         if (userTicketIds.length == 0) return;
 
         uint256 totalPrize;
-        uint256 totalPoolFunds = uint256(raffle.totalSold) * raffle.ticketTokenQuantity;
+        // Calculate total pool minus fees
+        uint256 totalPoolFunds = (uint256(raffle.totalSold) * raffle.ticketTokenQuantity) - raffle.feeCollected;
 
         for (uint256 i = 0; i < userTicketIds.length;) {
             uint256 ticketId = userTicketIds[i];
@@ -337,8 +350,8 @@ contract Raffle is IEntropyConsumer, ReentrancyGuard, Ownable {
             for (uint256 j = 0; j < raffle.ticketDistribution.length;) {
                 if (raffle.ticketDistribution[j].fundPercentage > 0) {
                     if (_isTicketInArray(ticketId, raffle.winningTicketsPerPool[j])) {
-                        uint256 prizePerTicket = (totalPoolFunds * raffle.ticketDistribution[j].fundPercentage) / 
-                            (100 * raffle.ticketDistribution[j].ticketQuantity);
+                        uint256 poolPrize = (totalPoolFunds * raffle.ticketDistribution[j].fundPercentage) / 100;
+                        uint256 prizePerTicket = poolPrize / raffle.ticketDistribution[j].ticketQuantity;
                         totalPrize += prizePerTicket;
                         break;
                     }
@@ -430,13 +443,34 @@ contract Raffle is IEntropyConsumer, ReentrancyGuard, Ownable {
         );
     }
 
-    // This method is required by the IEntropyConsumer interface.
-    // It returns the address of the entropy contract which will call the callback.
-    function getEntropy() internal view override returns (address) {
-        return address(entropy);
+    // Add fee management functions
+    function setFeeCollector(address _feeCollector) external onlyOwner {
+        if (_feeCollector == address(0)) revert ZeroAddress();
+        feeCollector = _feeCollector;
+    }
+
+    function setFeePercentage(uint256 _feePercentage) external onlyOwner {
+        require(_feePercentage <= 1000, "Fee cannot exceed 10%");
+        feePercentage = _feePercentage;
+    }
+
+    // getters
+    function getFeeCollector() external view returns (address) {
+        return feeCollector;
+    }
+
+    function getFeePercentage() external view returns (uint256) {
+        return feePercentage;
     }
 
     function getSequenceFees() external view returns (uint256) {
         return entropy.getFee(entropy.getDefaultProvider());
     }
+
+    // This method is required by the IEntropyConsumer interface.
+    // It returns the address of the entropy contract which will call the callback.
+    function getEntropy() internal view override returns (address) {
+        return address(entropy);
+    }
+    
 }

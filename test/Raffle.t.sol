@@ -12,15 +12,19 @@ contract RaffleTest is Test {
     address public user1;
     address public user2;
     address public entropyAddress;
+    address public feeCollector;
+    uint256 public feePercentage;
 
     function setUp() public {
         owner = address(this);
         user1 = makeAddr("user1");
         user2 = makeAddr("user2");
         entropyAddress = makeAddr("entropy");
+        feeCollector = makeAddr("feeCollector");
+        feePercentage = 250; // 2.50%
 
         token = new MockERC20();
-        raffle = new Raffle(entropyAddress);
+        raffle = new Raffle(entropyAddress, feeCollector, feePercentage);
 
         // Fund test accounts
         token.transfer(user1, 1000 * 10**18);
@@ -239,5 +243,55 @@ contract RaffleTest is Test {
             bool isNull
         ) = raffle.getRaffleInfo(raffleId);
         assertEq(totalSold, 0);
+    }
+
+    function testTicketLifecycle() public {
+        // Create raffle
+        uint256 raffleId = createBasicRaffle();
+        
+        // Buy tickets
+        vm.startPrank(user1);
+        token.approve(address(raffle), 5e18);
+        raffle.buyTickets(raffleId, 5);
+        
+        // Verify purchase
+        assertEq(raffle.getUserTickets(raffleId, user1).length, 5);
+        
+        // Refund a ticket
+        uint256 ticketId = raffle.getUserTickets(raffleId, user1)[0];
+        raffle.refundTicket(raffleId, ticketId);
+        // Verify refund
+        assertEq(raffle.getUserTickets(raffleId, user1).length, 4);
+        
+        // Finalize raffle
+        vm.roll(block.number + 101);
+        raffle.finalizeRaffle(raffleId);
+        
+        // Verify winners don't include refunded ticket
+        uint256[] memory winners = raffle.getWinningTicketsForPool(raffleId, 0);
+        for (uint256 i = 0; i < winners.length; i++) {
+            assertFalse(winners[i] == ticketId);
+        }
+    }
+
+    function testGasEfficiency() public {
+        uint256 raffleId = createBasicRaffle();
+        
+        // Buy and refund multiple tickets
+        vm.startPrank(user1);
+        token.approve(address(raffle), 100e18);
+        
+        uint256 gasBefore = gasleft();
+        raffle.buyTickets(raffleId, 50);
+        uint256 buyGas = gasBefore - gasleft();
+        
+        uint256[] memory tickets = raffle.getUserTickets(raffleId, user1);
+        gasBefore = gasleft();
+        raffle.refundTicket(raffleId, tickets[0]);
+        uint256 refundGas = gasBefore - gasleft();
+        
+        // Gas should be reasonable
+        assertLt(buyGas, 1000000);
+        assertLt(refundGas, 100000);
     }
 }

@@ -6,6 +6,16 @@ export const RaffleABI = [
         "name": "entropyAddress",
         "type": "address",
         "internalType": "address"
+      },
+      {
+        "name": "_feeCollector",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "_feePercentage",
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ],
     "stateMutability": "nonpayable"
@@ -142,6 +152,32 @@ export const RaffleABI = [
   },
   {
     "type": "function",
+    "name": "feeCollector",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "feePercentage",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "finalizeRaffle",
     "inputs": [
       {
@@ -152,6 +188,32 @@ export const RaffleABI = [
     ],
     "outputs": [],
     "stateMutability": "payable"
+  },
+  {
+    "type": "function",
+    "name": "getFeeCollector",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getFeePercentage",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
   },
   {
     "type": "function",
@@ -316,6 +378,11 @@ export const RaffleABI = [
         "internalType": "address"
       },
       {
+        "name": "feeCollected",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
         "name": "ticketTokenQuantity",
         "type": "uint96",
         "internalType": "uint96"
@@ -409,6 +476,32 @@ export const RaffleABI = [
   },
   {
     "type": "function",
+    "name": "setFeeCollector",
+    "inputs": [
+      {
+        "name": "_feeCollector",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "setFeePercentage",
+    "inputs": [
+      {
+        "name": "_feePercentage",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "transferOwnership",
     "inputs": [
       {
@@ -419,6 +512,25 @@ export const RaffleABI = [
     ],
     "outputs": [],
     "stateMutability": "nonpayable"
+  },
+  {
+    "type": "event",
+    "name": "FeeCollected",
+    "inputs": [
+      {
+        "name": "raffleId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "amount",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
   },
   {
     "type": "event",
