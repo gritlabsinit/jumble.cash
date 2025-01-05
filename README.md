@@ -23,8 +23,8 @@ A gas-optimized raffle system built on Ethereum, featuring a Solidity smart cont
 ## Deployed Contracts
 
 ### Base Sepolia
-- **Raffle Contract**: [`0x3969FAb094BE423F1aaD8B5a6CC0B227Ddd64Ac5`](https://sepolia.basescan.org/address/0x3969FAb094BE423F1aaD8B5a6CC0B227Ddd64Ac5)
-- **Token Contract**: [`0x93999471865710Caa13896580D7a669D3D9f7E69`](https://sepolia.basescan.org/address/0x93999471865710Caa13896580D7a669D3D9f7E69)
+- **Raffle Contract**: [`0xD769355704aAd471222888dB1B4c2eCEF19e62b9`](https://sepolia.basescan.org/address/0xD769355704aAd471222888dB1B4c2eCEF19e62b9)
+- **Token Contract**: [`0xCa519a5cb8a62ACd3430e4b8e4dcD5BB0D5464BF`](https://sepolia.basescan.org/address/0xCa519a5cb8a62ACd3430e4b8e4dcD5BB0D5464BF)
 
 ## Getting Started
 
@@ -113,6 +113,13 @@ See `ts/examples/complete-flow.ts` for a complete usage example.
 - Owner controls
 - Gas optimization
 - Proper event emission
+
+
+## Changelog
+
+- 0.0.1: Initial release   
+- 0.0.2: Added raffle state management and winner selection
+- 0.0.3: Added ticket refund map and ticket owner and prize mapping
 
 ## Contributing
 

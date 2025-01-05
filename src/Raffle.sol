@@ -35,6 +35,7 @@ contract Raffle is IEntropyConsumer, ReentrancyGuard, Ownable {
     error RaffleIsNull();
     error InvalidTicketId();
     error ZeroAddress();
+    error RaffleExpired();
 
     struct TicketDistribution {
         uint96 fundPercentage; // Using uint96 to pack with ticketQuantity
@@ -43,23 +44,40 @@ contract Raffle is IEntropyConsumer, ReentrancyGuard, Ownable {
 
     struct RaffleInfo {
         address ticketToken;
-        uint256 feeCollected;
         uint96 ticketTokenQuantity;
-        uint32 endBlock;
-        uint32 minTicketsRequired;
-        uint32 totalSold;
-        uint32 availableTickets;
-        uint64 sequenceNumber;
-        bool isActive;
-        bool isFinalized;
-        bool isNull;
+
+        uint32 totalTickets; // N: total tickets possible
+        uint32 ticketsMinted; // Tm: number of new tickets minted
+        uint32 ticketsRefunded; // Tr: number of tickets refunded
+        uint32 ticketsAvailable; // Ta: number of tickets available for sale
+        
+        uint64 sequenceNumber; // N: sequence number for entropy request
+        uint256 randomSeed; // N: random seed for winner selection
+
+        uint256 feeCollected; // N: fee percentage to be collected
+        uint32 minTicketsRequired; // Tmin: minimum tickets required to be sold for raffle to be valid
+        uint32 endBlock; // N: block number when raffle ends
+
+        bool isActive; // N: raffle is active
+        bool isFinalized; // N: raffle is finalized
+        bool isNull; // N: raffle is null
+
+        // create a mapping of ticketIdx to the owner and the percentage of the pool it is eligible for
+
         // Packed into single slots above
         mapping(address => uint256[]) userTickets;
-        mapping(uint256 => address) ticketOwners;
+        mapping(uint256 => PackedTicketInfo) ticketOwnersAndPrizes;
         mapping(address => bool) hasClaimed;
         mapping(uint256 => bool) isTicketRefunded;
         TicketDistribution[] ticketDistribution;
         mapping(uint256 => uint256[]) winningTicketsPerPool;
+        uint32[] refundedTicketIds;
+    }
+
+    // New struct to pack ticket info efficiently
+    struct PackedTicketInfo {
+        address owner;      // 160 bits
+        uint96 prizeShare;  // 96 bits (percentage of total pool * 1e6 for precision)
     }
 
     // State variables
@@ -79,6 +97,26 @@ contract Raffle is IEntropyConsumer, ReentrancyGuard, Ownable {
     event RaffleDeclaredNull(uint256 indexed raffleId);
     event PrizeClaimed(uint256 indexed raffleId, address indexed winner, uint256 amount);
     event FeeCollected(uint256 indexed raffleId, uint256 amount);
+    event WinnersSelected(uint256 indexed raffleId, uint32 validTickets);
+    event RaffleStateUpdated(uint256 indexed raffleId, bool isActive);
+
+    // Add modifier to check and update raffle state
+    modifier updateRaffleState(uint256 raffleId) {
+        RaffleInfo storage raffle = raffles[raffleId];
+        
+        // Check if raffle needs to be deactivated
+        if (raffle.isActive && block.number >= raffle.endBlock) {
+            raffle.isActive = false;
+            emit RaffleStateUpdated(raffleId, false);
+            
+            // If minimum tickets weren't sold, mark as null
+            if (raffle.ticketsMinted - raffle.ticketsRefunded < raffle.minTicketsRequired) {
+                raffle.isNull = true;
+                emit RaffleDeclaredNull(raffleId);
+            }
+        }
+        _;
+    }
 
     /**
      * @notice Creates a new raffle
@@ -119,7 +157,10 @@ contract Raffle is IEntropyConsumer, ReentrancyGuard, Ownable {
         raffle.ticketTokenQuantity = ticketTokenQuantity;
         raffle.endBlock = uint32(block.number + duration);
         raffle.minTicketsRequired = minTicketsRequired;
-        raffle.availableTickets = totalTickets;
+
+        raffle.totalTickets = totalTickets;
+        raffle.ticketsAvailable = totalTickets;
+        
         raffle.isActive = true;
 
         for (uint256 i = 0; i < distribution.length;) {
@@ -135,47 +176,67 @@ contract Raffle is IEntropyConsumer, ReentrancyGuard, Ownable {
      * @param raffleId ID of the raffle
      * @param quantity Number of tickets to purchase
      */
-    function buyTickets(uint256 raffleId, uint32 quantity) external nonReentrant {
+    function buyTickets(uint256 raffleId, uint32 quantity) 
+        external 
+        nonReentrant 
+        updateRaffleState(raffleId) 
+    {
         RaffleInfo storage raffle = raffles[raffleId];
         
-        if (!raffle.isActive || block.number >= raffle.endBlock) revert RaffleNotActive();
-        if (raffle.availableTickets < quantity) revert InsufficientTickets();
+        if (!raffle.isActive) revert RaffleNotActive();
+        if (raffle.ticketsAvailable < quantity) revert InsufficientTickets();
         if (quantity == 0) revert InvalidTicketId();
 
-        // Safe multiplication check
-        uint256 ticketCost = raffle.ticketTokenQuantity;
-        if (ticketCost > type(uint256).max / quantity) revert("Arithmetic overflow");
-        uint256 totalCost = quantity * ticketCost;
-        
         // Transfer tokens first to prevent reentrancy
-        IERC20(raffle.ticketToken).transferFrom(msg.sender, address(this), totalCost);
+        IERC20(raffle.ticketToken).transferFrom(
+            msg.sender, 
+            address(this), 
+            uint256(quantity) * raffle.ticketTokenQuantity
+        );
 
-        uint32 ticketsAssigned;
-        uint256 i;
-        
-        // Find available tickets (including refunded ones)
-        while (ticketsAssigned < quantity && i < type(uint32).max) {
-            if (raffle.ticketOwners[i] == address(0) || raffle.isTicketRefunded[i]) {
-                raffle.ticketOwners[i] = msg.sender;
-                raffle.userTickets[msg.sender].push(i);
-                raffle.isTicketRefunded[i] = false;
-                ticketsAssigned++;
-            }
-            i++;
-        }
-        
-        // Check if we assigned all tickets
-        if (ticketsAssigned != quantity) revert("Failed to assign all tickets");
-        
-        // Safe arithmetic operations
-        if (raffle.availableTickets < quantity) revert InsufficientTickets();
-        raffle.availableTickets -= quantity;
-        
-        uint32 newTotalSold = raffle.totalSold + quantity;
-        if (newTotalSold < raffle.totalSold) revert("Overflow in totalSold");
-        raffle.totalSold = newTotalSold;
+        _assignTickets(raffle, msg.sender, quantity);
         
         emit TicketsPurchased(raffleId, msg.sender, quantity);
+    }
+
+    // Split ticket assignment logic
+    function _assignTickets(RaffleInfo storage raffle, address buyer, uint32 quantity) private {
+        uint32 assigned;
+        
+        // Assign refunded tickets first
+        while (assigned < quantity && raffle.ticketsRefunded > 0) {
+            uint256 ticketId = raffle.refundedTicketIds[raffle.ticketsRefunded - 1];
+            raffle.ticketOwnersAndPrizes[ticketId] = PackedTicketInfo({
+                owner: buyer,
+                prizeShare: 0
+            });
+            raffle.userTickets[buyer].push(ticketId);
+            raffle.refundedTicketIds.pop();
+            unchecked {
+                ++assigned;
+                --raffle.ticketsRefunded;
+            }
+        }
+
+        // Assign new tickets if needed
+        uint256 currentId = raffle.ticketsMinted;
+        while (assigned < quantity && currentId < raffle.totalTickets) {
+            if (raffle.ticketOwnersAndPrizes[currentId].owner == address(0)) {
+                raffle.ticketOwnersAndPrizes[currentId] = PackedTicketInfo({
+                    owner: buyer,
+                    prizeShare: 0
+                });
+                raffle.userTickets[buyer].push(currentId);
+                unchecked {
+                    ++assigned;
+                    ++raffle.ticketsMinted;
+                }
+            }
+            unchecked { ++currentId; }
+        }
+
+        require(assigned == quantity, "Failed to assign all tickets");
+        raffle.ticketsAvailable -= quantity;
     }
 
     /**
@@ -183,17 +244,25 @@ contract Raffle is IEntropyConsumer, ReentrancyGuard, Ownable {
      * @param raffleId ID of the raffle
      * @param ticketId ID of the ticket to refund
      */
-    function refundTicket(uint256 raffleId, uint256 ticketId) external nonReentrant {
-        RaffleInfo storage raffle = raffles[raffleId];
-        
-        if (!raffle.isActive && !raffle.isNull) revert RaffleNotActive();
-        if (raffle.ticketOwners[ticketId] != msg.sender) revert TicketNotOwned();
-        if (raffle.isTicketRefunded[ticketId]) revert TicketAlreadyRefunded();
+    function refundTicket(uint256 raffleId, uint32 ticketId) 
+        external 
+        nonReentrant 
+        updateRaffleState(raffleId) 
+    {
+        RaffleInfo storage raffle = raffles[raffleId];        
+        if (!raffle.isActive) revert RaffleNotActive();
+        if (raffle.ticketOwnersAndPrizes[ticketId].owner != msg.sender) revert TicketNotOwned();
 
-        raffle.isTicketRefunded[ticketId] = true;
+        // add the ticket id to the refunded ticket ids array
+        raffle.refundedTicketIds.push(ticketId);
+        raffle.ticketOwnersAndPrizes[ticketId] = PackedTicketInfo({
+            owner: address(0),
+            prizeShare: 0
+        });
+
         unchecked {
-            raffle.availableTickets++;
-            raffle.totalSold--;
+            raffle.ticketsRefunded++;
+            raffle.ticketsAvailable++;
         }
 
         IERC20(raffle.ticketToken).transfer(msg.sender, raffle.ticketTokenQuantity);
@@ -204,13 +273,18 @@ contract Raffle is IEntropyConsumer, ReentrancyGuard, Ownable {
      * @notice Finalize the raffle and determine winners
      * @param raffleId ID of the raffle
      */
-    function finalizeRaffle(uint256 raffleId) external payable {
+    function finalizeRaffle(uint256 raffleId) 
+        external 
+        payable 
+        updateRaffleState(raffleId) 
+    {
         RaffleInfo storage raffle = raffles[raffleId];
         
         if (block.number < raffle.endBlock) revert RaffleNotEnded();
         if (raffle.isFinalized) revert RaffleAlreadyFinalized();
 
-        if (raffle.totalSold < raffle.minTicketsRequired) {
+        uint32 _ticketsSold = raffle.ticketsMinted - raffle.ticketsRefunded;
+        if (_ticketsSold < raffle.minTicketsRequired) {
             raffle.isNull = true;
             raffle.isActive = false;
             raffle.isFinalized = true;
@@ -219,7 +293,7 @@ contract Raffle is IEntropyConsumer, ReentrancyGuard, Ownable {
         }
 
         // Calculate and transfer fees
-        uint256 totalPoolAmount = uint256(raffle.totalSold) * raffle.ticketTokenQuantity;
+        uint256 totalPoolAmount = uint256(_ticketsSold) * raffle.ticketTokenQuantity;
         uint256 feeAmount = (totalPoolAmount * feePercentage) / 10000;
         
         if (feeAmount > 0) {
@@ -243,86 +317,83 @@ contract Raffle is IEntropyConsumer, ReentrancyGuard, Ownable {
         emit SequenceNumberRequested(raffleId, sequenceNumber);
     }
 
-    /** 
-     * @param sequenceNumber The sequence number of the request.
-     * @param provider The address of the provider that generated the random number. If your app uses multiple providers, you can use this argument to distinguish which one is calling the app back.
-     * @param randomNumber The generated random number.
-     **/
-    function entropyCallback(
-        uint64 sequenceNumber,
-        address provider,
-        bytes32 randomNumber
-    ) internal override {
-        uint256 raffleId = sequenceNumberToRaffleId[sequenceNumber];
-        RaffleInfo storage raffle = raffles[raffleId];
-
-        uint256 randomSeed = uint256(randomNumber);
-        _selectWinners(raffleId, randomSeed);
-        
-        raffle.isFinalized = true;
-
-        emit RaffleFinalized(raffleId, randomSeed);
-    }
     
     /**
      * @notice Internal function to select winners
      * @param raffleId ID of the raffle
-     * @param randomSeed Random seed for winner selection
      */
-    function _selectWinners(uint256 raffleId, uint256 randomSeed) internal {
+    function selectWinners(uint256 raffleId) 
+        public 
+        updateRaffleState(raffleId) 
+    {
         RaffleInfo storage raffle = raffles[raffleId];
+        if (raffle.isActive) revert RaffleNotEnded();
+        require(raffle.isFinalized && !raffle.isNull, "Invalid raffle state");
+
+        uint32 validTickets = raffle.ticketsMinted - raffle.ticketsRefunded;
+        _selectWinnersForPools(raffle, validTickets);
+
+        emit WinnersSelected(raffleId, validTickets);
+    }
+
+    function _selectWinnersForPools(RaffleInfo storage raffle, uint32 validTickets) private {
+        uint256[] memory tickets = new uint256[](validTickets);
+        uint256 idx;
         
-        // Create array of valid tickets
-        uint256[] memory availableTickets = new uint256[](raffle.totalSold);
-        uint256 availableIndex;
-        
-        // Create array of valid tickets
-        for (uint256 i = 0; i < type(uint32).max;) {
-            if (raffle.ticketOwners[i] != address(0) && !raffle.isTicketRefunded[i]) {
-                availableTickets[availableIndex] = i;
-                unchecked { ++availableIndex; }
-                if (availableIndex == raffle.totalSold) break;
+        // Fill valid tickets array
+        for (uint256 i; i < raffle.ticketsMinted && idx < validTickets;) {
+            if (raffle.ticketOwnersAndPrizes[i].owner != address(0)) {
+                tickets[idx++] = i;
             }
             unchecked { ++i; }
         }
 
-        // Select winners for each pool
-        uint256 currentSeed = randomSeed;
-        uint256 processedTickets;
+        // Select winners
+        uint256 seed = raffle.randomSeed;
+        uint256 processed;
 
-        for (uint256 i = 0; i < raffle.ticketDistribution.length;) {
-            uint256 winnersCount = raffle.ticketDistribution[i].ticketQuantity;
-            
-            // Skip if no winners in this pool or no percentage allocated
-            if (winnersCount == 0 || raffle.ticketDistribution[i].fundPercentage == 0) {
-                unchecked { ++i; }
-                continue;
+        for (uint256 i; i < raffle.ticketDistribution.length;) {
+            TicketDistribution memory dist = raffle.ticketDistribution[i];
+            if (dist.ticketQuantity > 0 && dist.fundPercentage > 0) {
+                uint256 winners = dist.ticketQuantity > (validTickets - processed) ? 
+                                (validTickets - processed) : 
+                                dist.ticketQuantity;
+                
+                _selectPoolWinners(raffle, i, tickets, processed, winners, seed);
+                processed += winners;
             }
-
-            // Make sure we don't try to select more winners than available tickets
-            uint256 remainingTickets = raffle.totalSold - processedTickets;
-            if (remainingTickets == 0) break;
-            
-            // Adjust winners count if needed
-            winnersCount = winnersCount > remainingTickets ? remainingTickets : winnersCount;
-
-            for (uint256 j = 0; j < winnersCount;) {
-                currentSeed = uint256(keccak256(abi.encodePacked(currentSeed, j)));
-                uint256 winnerIndex = processedTickets + (currentSeed % (raffle.totalSold - processedTickets));
-                
-                // Swap and select winner
-                uint256 temp = availableTickets[processedTickets];
-                availableTickets[processedTickets] = availableTickets[winnerIndex];
-                availableTickets[winnerIndex] = temp;
-                
-                raffle.winningTicketsPerPool[i].push(availableTickets[processedTickets]);
-                
-                unchecked { 
-                    ++processedTickets;
-                    ++j;
-                }
-            }
+            if (processed >= validTickets) break;
             unchecked { ++i; }
+        }
+    }
+
+    function _selectPoolWinners(
+        RaffleInfo storage raffle,
+        uint256 poolIndex,
+        uint256[] memory tickets,
+        uint256 startIndex,
+        uint256 count,
+        uint256 seed
+    ) private {
+        TicketDistribution memory dist = raffle.ticketDistribution[poolIndex];
+        uint256 prizePerWinner = (dist.fundPercentage * 1e6) / dist.ticketQuantity; // Scale by 1e6 for precision
+        
+        for (uint256 i; i < count;) {
+            seed = uint256(keccak256(abi.encodePacked(seed, i)));
+            uint256 winnerIdx = startIndex + (seed % (tickets.length - startIndex));
+            
+            // Swap winner to current position
+            (tickets[startIndex], tickets[winnerIdx]) = (tickets[winnerIdx], tickets[startIndex]);
+            uint256 winningTicket = tickets[startIndex];
+            
+            // Store prize share directly with ticket
+            PackedTicketInfo storage ticketInfo = raffle.ticketOwnersAndPrizes[winningTicket];
+            ticketInfo.prizeShare = uint96(prizePerWinner); // Prize share in basis points * 1e6
+            
+            unchecked {
+                ++startIndex;
+                ++i;
+            }
         }
     }
 
@@ -330,42 +401,48 @@ contract Raffle is IEntropyConsumer, ReentrancyGuard, Ownable {
      * @notice Claim prizes for winning tickets
      * @param raffleId ID of the raffle
      */
-    function claimPrize(uint256 raffleId) external nonReentrant {
+    function claimPrize(uint256 raffleId) 
+        external 
+        nonReentrant 
+        updateRaffleState(raffleId) 
+    {
         RaffleInfo storage raffle = raffles[raffleId];
         
         if (!raffle.isFinalized) revert RaffleNotFinalized();
         if (raffle.isNull) revert RaffleIsNull();
         if (raffle.hasClaimed[msg.sender]) revert AlreadyClaimed();
 
-        uint256[] memory userTicketIds = raffle.userTickets[msg.sender];
-        if (userTicketIds.length == 0) return;
+        uint256 prize = _calculatePrize(raffle, msg.sender);
+        if (prize == 0) return;
 
-        uint256 totalPrize;
-        // Calculate total pool minus fees
-        uint256 totalPoolFunds = (uint256(raffle.totalSold) * raffle.ticketTokenQuantity) - raffle.feeCollected;
+        raffle.hasClaimed[msg.sender] = true;
+        IERC20(raffle.ticketToken).transfer(msg.sender, prize);
+        emit PrizeClaimed(raffleId, msg.sender, prize);
+    }
 
-        for (uint256 i = 0; i < userTicketIds.length;) {
-            uint256 ticketId = userTicketIds[i];
+    function _calculatePrize(RaffleInfo storage raffle, address user) private view returns (uint256) {
+        uint256[] memory userTickets = raffle.userTickets[user];
+        if (userTickets.length == 0) return 0;
+
+        uint256 totalPool = uint256(raffle.ticketsMinted - raffle.ticketsRefunded) * 
+                           raffle.ticketTokenQuantity - 
+                           raffle.feeCollected;
+        uint256 prize;
+
+        // Calculate prize based on stored prize shares
+        for (uint256 i; i < userTickets.length;) {
+            uint256 ticketId = userTickets[i];
+            PackedTicketInfo memory ticketInfo = raffle.ticketOwnersAndPrizes[ticketId];
             
-            for (uint256 j = 0; j < raffle.ticketDistribution.length;) {
-                if (raffle.ticketDistribution[j].fundPercentage > 0) {
-                    if (_isTicketInArray(ticketId, raffle.winningTicketsPerPool[j])) {
-                        uint256 poolPrize = (totalPoolFunds * raffle.ticketDistribution[j].fundPercentage) / 100;
-                        uint256 prizePerTicket = poolPrize / raffle.ticketDistribution[j].ticketQuantity;
-                        totalPrize += prizePerTicket;
-                        break;
-                    }
+            if (ticketInfo.prizeShare > 0) {
+                unchecked {
+                    prize += (totalPool * ticketInfo.prizeShare) / 1e8; // Adjust for precision
                 }
-                unchecked { ++j; }
             }
             unchecked { ++i; }
         }
-
-        if (totalPrize > 0) {
-            raffle.hasClaimed[msg.sender] = true;
-            IERC20(raffle.ticketToken).transfer(msg.sender, totalPrize);
-            emit PrizeClaimed(raffleId, msg.sender, totalPrize);
-        }
+        
+        return prize;
     }
 
     /**
@@ -383,7 +460,7 @@ contract Raffle is IEntropyConsumer, ReentrancyGuard, Ownable {
 
         uint256 refundAmount;
         for (uint256 i = 0; i < userTicketIds.length;) {
-            if (!raffle.isTicketRefunded[userTicketIds[i]]) {
+            if (raffle.ticketOwnersAndPrizes[userTicketIds[i]].owner == msg.sender && !raffle.isTicketRefunded[userTicketIds[i]]) {
                 refundAmount += raffle.ticketTokenQuantity;
                 raffle.isTicketRefunded[userTicketIds[i]] = true;
             }
@@ -423,24 +500,46 @@ contract Raffle is IEntropyConsumer, ReentrancyGuard, Ownable {
         uint96 ticketTokenQuantity,
         uint32 endBlock,
         uint32 minTicketsRequired,
-        uint32 totalSold,
-        uint32 availableTickets,
+        uint32 ticketsRefunded,
+        uint32 ticketsMinted,
+        uint32 ticketsAvailable,
         bool isActive,
         bool isFinalized,
         bool isNull
     ) {
         RaffleInfo storage raffle = raffles[raffleId];
+
         return (
             raffle.ticketToken,
             raffle.ticketTokenQuantity,
             raffle.endBlock,
             raffle.minTicketsRequired,
-            raffle.totalSold,
-            raffle.availableTickets,
+            raffle.ticketsRefunded,
+            raffle.ticketsMinted,
+            raffle.ticketsAvailable,
             raffle.isActive,
             raffle.isFinalized,
             raffle.isNull
         );
+    }
+
+    /** 
+     * @param sequenceNumber The sequence number of the request.
+     * @param provider The address of the provider that generated the random number. If your app uses multiple providers, you can use this argument to distinguish which one is calling the app back.
+     * @param randomNumber The generated random number.
+     **/
+    function entropyCallback(
+        uint64 sequenceNumber,
+        address provider,
+        bytes32 randomNumber
+    ) internal override {
+        uint256 raffleId = sequenceNumberToRaffleId[sequenceNumber];
+        RaffleInfo storage raffle = raffles[raffleId];
+
+        raffle.randomSeed = uint256(randomNumber);
+        
+        raffle.isFinalized = true;
+        emit RaffleFinalized(raffleId, raffle.randomSeed);
     }
 
     // Add fee management functions
@@ -472,5 +571,11 @@ contract Raffle is IEntropyConsumer, ReentrancyGuard, Ownable {
     function getEntropy() internal view override returns (address) {
         return address(entropy);
     }
-    
+
+    // Optional: Add function to manually check/update state
+    function checkRaffleState(uint256 raffleId) external updateRaffleState(raffleId) {
+        // This function only executes the modifier
+        // Useful for external contracts that need to ensure state is current
+    }
+
 }
