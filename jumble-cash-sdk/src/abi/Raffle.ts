@@ -63,6 +63,19 @@ export const RaffleABI = [
   },
   {
     "type": "function",
+    "name": "checkRaffleState",
+    "inputs": [
+      {
+        "name": "raffleId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "claimPrize",
     "inputs": [
       {
@@ -247,12 +260,17 @@ export const RaffleABI = [
         "internalType": "uint32"
       },
       {
-        "name": "totalSold",
+        "name": "ticketsRefunded",
         "type": "uint32",
         "internalType": "uint32"
       },
       {
-        "name": "availableTickets",
+        "name": "ticketsMinted",
+        "type": "uint32",
+        "internalType": "uint32"
+      },
+      {
+        "name": "ticketsAvailable",
         "type": "uint32",
         "internalType": "uint32"
       },
@@ -378,32 +396,27 @@ export const RaffleABI = [
         "internalType": "address"
       },
       {
-        "name": "feeCollected",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
         "name": "ticketTokenQuantity",
         "type": "uint96",
         "internalType": "uint96"
       },
       {
-        "name": "endBlock",
+        "name": "totalTickets",
         "type": "uint32",
         "internalType": "uint32"
       },
       {
-        "name": "minTicketsRequired",
+        "name": "ticketsMinted",
         "type": "uint32",
         "internalType": "uint32"
       },
       {
-        "name": "totalSold",
+        "name": "ticketsRefunded",
         "type": "uint32",
         "internalType": "uint32"
       },
       {
-        "name": "availableTickets",
+        "name": "ticketsAvailable",
         "type": "uint32",
         "internalType": "uint32"
       },
@@ -411,6 +424,26 @@ export const RaffleABI = [
         "name": "sequenceNumber",
         "type": "uint64",
         "internalType": "uint64"
+      },
+      {
+        "name": "randomSeed",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "feeCollected",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "minTicketsRequired",
+        "type": "uint32",
+        "internalType": "uint32"
+      },
+      {
+        "name": "endBlock",
+        "type": "uint32",
+        "internalType": "uint32"
       },
       {
         "name": "isActive",
@@ -441,8 +474,8 @@ export const RaffleABI = [
       },
       {
         "name": "ticketId",
-        "type": "uint256",
-        "internalType": "uint256"
+        "type": "uint32",
+        "internalType": "uint32"
       }
     ],
     "outputs": [],
@@ -452,6 +485,19 @@ export const RaffleABI = [
     "type": "function",
     "name": "renounceOwnership",
     "inputs": [],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "selectWinners",
+    "inputs": [
+      {
+        "name": "raffleId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
     "outputs": [],
     "stateMutability": "nonpayable"
   },
@@ -635,6 +681,25 @@ export const RaffleABI = [
   },
   {
     "type": "event",
+    "name": "RaffleStateUpdated",
+    "inputs": [
+      {
+        "name": "raffleId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "isActive",
+        "type": "bool",
+        "indexed": false,
+        "internalType": "bool"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "SequenceNumberRequested",
     "inputs": [
       {
@@ -703,6 +768,25 @@ export const RaffleABI = [
     "anonymous": false
   },
   {
+    "type": "event",
+    "name": "WinnersSelected",
+    "inputs": [
+      {
+        "name": "raffleId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "validTickets",
+        "type": "uint32",
+        "indexed": false,
+        "internalType": "uint32"
+      }
+    ],
+    "anonymous": false
+  },
+  {
     "type": "error",
     "name": "AlreadyClaimed",
     "inputs": []
@@ -747,6 +831,11 @@ export const RaffleABI = [
   {
     "type": "error",
     "name": "RaffleAlreadyFinalized",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "RaffleExpired",
     "inputs": []
   },
   {

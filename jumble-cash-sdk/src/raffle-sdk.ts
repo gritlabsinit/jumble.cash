@@ -32,6 +32,17 @@ interface SequenceNumberRequestedEvent {
     sequenceNumber: bigint;
 }
 
+interface WinnersSelectedEvent {
+    raffleId: bigint;
+    validTickets: bigint;
+}
+
+interface TicketRefundedEvent {
+    raffleId: bigint;
+    user: string;
+    ticketId: bigint;
+}
+
 export class RaffleSdk {
     private provider: ethers.Provider;
     private signer: ethers.Signer;
@@ -149,6 +160,28 @@ export class RaffleSdk {
         }
     }
 
+    async selectWinners(raffleId: number): Promise<WinnersSelectedEvent | null> {
+        try {
+            const tx = await this.raffleContract.selectWinners(raffleId);
+            const receipt = await tx.wait();
+            const event = this.parseEvent(receipt, 'WinnersSelected');
+            
+            if (!event) {
+                console.warn('WinnersSelected event not found in transaction receipt');
+                return null;
+            }
+
+            return {
+                raffleId: event.args[0],
+                validTickets: event.args[1]
+            };
+        } catch (error) {
+            const decodedError: DecodedError = await this.errorDecoder.decode(error)          
+            console.error('Error selecting winners:', decodedError);
+            throw decodedError;
+        }
+    }
+
     async claimPrize(raffleId: number): Promise<PrizeClaimedEvent | null> {
         try {
             const tx = await this.raffleContract.claimPrize(raffleId);
@@ -172,11 +205,22 @@ export class RaffleSdk {
         }
     }
 
-    async refundTicket(raffleId: number, ticketId: number) {
+    async refundTicket(raffleId: number, ticketId: number): Promise<TicketRefundedEvent | null> {
         try {
             const tx = await this.raffleContract.refundTicket(raffleId, ticketId);
             const receipt = await tx.wait();
-            return receipt;
+            const event = this.parseEvent(receipt, 'TicketRefunded');
+            
+            if (!event) {
+                console.warn('TicketRefunded event not found in transaction receipt');
+                return null;
+            }
+
+            return {
+                raffleId: event.args[0],
+                user: event.args[1],
+                ticketId: event.args[2]
+            };
         } catch (error) {
             const decodedError: DecodedError = await this.errorDecoder.decode(error)          
             console.error('Error refunding ticket:', decodedError);
