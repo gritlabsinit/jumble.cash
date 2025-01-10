@@ -6,7 +6,6 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import { IEntropyConsumer } from "@pythnetwork/entropy-sdk-solidity/IEntropyConsumer.sol";
 import { IEntropy } from "@pythnetwork/entropy-sdk-solidity/IEntropy.sol";
-import "./interfaces/ITicketPricing.sol";
 
 /**
  * @title Raffle
@@ -14,17 +13,13 @@ import "./interfaces/ITicketPricing.sol";
  */
 contract Raffle is IEntropyConsumer, ReentrancyGuard, Ownable {
     // Add constructor to initialize Ownable
-    constructor(
-        address entropyAddress,
-        address _feeCollector,
-        uint256 _feePercentage,
-        address _ticketPricing
-    ) Ownable(msg.sender) {
+    constructor(address entropyAddress, address _feeCollector, uint256 _feePercentage) 
+        Ownable(msg.sender) 
+    {
         entropy = IEntropy(entropyAddress);
         feeCollector = _feeCollector;
         require(_feePercentage <= 1000, "Fee cannot exceed 10%"); // Max 10% fee
         feePercentage = _feePercentage;
-        ticketPricing = ITicketPricing(_ticketPricing);
     }
 
     // Custom errors for gas optimization
@@ -83,7 +78,6 @@ contract Raffle is IEntropyConsumer, ReentrancyGuard, Ownable {
     struct PackedTicketInfo {
         address owner;      // 160 bits
         uint96 prizeShare;  // 96 bits (percentage of total pool * 1e6 for precision)
-        uint256 purchasePrice; // Store the price at which ticket was purchased
     }
 
     // State variables
@@ -93,7 +87,6 @@ contract Raffle is IEntropyConsumer, ReentrancyGuard, Ownable {
     IEntropy public entropy;
     uint256 public feePercentage; // In basis points (e.g., 250 = 2.50%)
     address public feeCollector;
-    ITicketPricing public ticketPricing;
 
     // Events
     event RaffleCreated(uint256 indexed raffleId, address creator, uint256 totalTickets);
@@ -194,75 +187,20 @@ contract Raffle is IEntropyConsumer, ReentrancyGuard, Ownable {
         if (raffle.ticketsAvailable < quantity) revert InsufficientTickets();
         if (quantity == 0) revert InvalidTicketId();
 
-        uint256 totalCost = 0;
-        uint256[] memory prices = new uint256[](quantity);
-        
-        for (uint32 i = 0; i < quantity;) {
-            uint256 price = ticketPricing.calculatePrice(
-                raffle.ticketTokenQuantity,
-                raffle.totalTickets,
-                raffle.ticketsMinted - raffle.ticketsRefunded + i
-            );
-            prices[i] = price;
-            totalCost += price;
-            unchecked { ++i; }
-        }
-
+        // Transfer tokens first to prevent reentrancy
         IERC20(raffle.ticketToken).transferFrom(
             msg.sender, 
             address(this), 
-            totalCost
+            uint256(quantity) * raffle.ticketTokenQuantity
         );
 
-        _assignTicketsIndividual(raffle, msg.sender, quantity, prices);
+        _assignTickets(raffle, msg.sender, quantity);
         
         emit TicketsPurchased(raffleId, msg.sender, quantity);
     }
 
-    /**
-     * @notice Batch purchase tickets for a raffle
-     * @dev This is a batch version of the buyTickets function with approximate pricing
-     * @param raffleId ID of the raffle
-     * @param quantity Number of tickets to purchase
-     */
-    function buyTicketsBatch(uint256 raffleId, uint32 quantity) 
-        external 
-        nonReentrant 
-        updateRaffleState(raffleId) 
-    {
-        RaffleInfo storage raffle = raffles[raffleId];
-        
-        if (!raffle.isActive) revert RaffleNotActive();
-        if (raffle.ticketsAvailable < quantity) revert InsufficientTickets();
-        if (quantity == 0) revert InvalidTicketId();
-
-        uint256 totalCost = ticketPricing.calculateBatchPrice(
-            raffle.ticketTokenQuantity,
-            raffle.totalTickets,
-            raffle.ticketsMinted - raffle.ticketsRefunded,
-            quantity
-        );
-
-        uint256 pricePerTicket = totalCost / quantity;
-
-        IERC20(raffle.ticketToken).transferFrom(
-            msg.sender, 
-            address(this), 
-            totalCost
-        );
-
-        _assignTicketsBatch(raffle, msg.sender, quantity, pricePerTicket);
-        
-        emit TicketsPurchased(raffleId, msg.sender, quantity);
-    }
-
-    // Split into two assignment functions
-    function _assignTicketsIndividual(
-        RaffleInfo storage raffle, 
-        address buyer, 
-        uint32 quantity, 
-        uint256[] memory prices
-    ) private {
+    // Split ticket assignment logic
+    function _assignTickets(RaffleInfo storage raffle, address buyer, uint32 quantity) private {
         uint32 assigned;
         
         // Assign refunded tickets first
@@ -270,8 +208,7 @@ contract Raffle is IEntropyConsumer, ReentrancyGuard, Ownable {
             uint256 ticketId = raffle.refundedTicketIds[raffle.ticketsRefunded - 1];
             raffle.ticketOwnersAndPrizes[ticketId] = PackedTicketInfo({
                 owner: buyer,
-                prizeShare: 0,
-                purchasePrice: prices[assigned]
+                prizeShare: 0
             });
             raffle.userTickets[buyer].push(ticketId);
             raffle.refundedTicketIds.pop();
@@ -287,54 +224,7 @@ contract Raffle is IEntropyConsumer, ReentrancyGuard, Ownable {
             if (raffle.ticketOwnersAndPrizes[currentId].owner == address(0)) {
                 raffle.ticketOwnersAndPrizes[currentId] = PackedTicketInfo({
                     owner: buyer,
-                    prizeShare: 0,
-                    purchasePrice: prices[assigned]
-                });
-                raffle.userTickets[buyer].push(currentId);
-                unchecked {
-                    ++assigned;
-                    ++raffle.ticketsMinted;
-                }
-            }
-            unchecked { ++currentId; }
-        }
-
-        require(assigned == quantity, "Failed to assign all tickets");
-        raffle.ticketsAvailable -= quantity;
-    }
-
-    function _assignTicketsBatch(
-        RaffleInfo storage raffle, 
-        address buyer, 
-        uint32 quantity, 
-        uint256 pricePerTicket
-    ) private {
-        uint32 assigned;
-        
-        // Assign refunded tickets first
-        while (assigned < quantity && raffle.ticketsRefunded > 0) {
-            uint256 ticketId = raffle.refundedTicketIds[raffle.ticketsRefunded - 1];
-            raffle.ticketOwnersAndPrizes[ticketId] = PackedTicketInfo({
-                owner: buyer,
-                prizeShare: 0,
-                purchasePrice: pricePerTicket
-            });
-            raffle.userTickets[buyer].push(ticketId);
-            raffle.refundedTicketIds.pop();
-            unchecked {
-                ++assigned;
-                --raffle.ticketsRefunded;
-            }
-        }
-
-        // Assign new tickets if needed
-        uint256 currentId = raffle.ticketsMinted;
-        while (assigned < quantity && currentId < raffle.totalTickets) {
-            if (raffle.ticketOwnersAndPrizes[currentId].owner == address(0)) {
-                raffle.ticketOwnersAndPrizes[currentId] = PackedTicketInfo({
-                    owner: buyer,
-                    prizeShare: 0,
-                    purchasePrice: pricePerTicket
+                    prizeShare: 0
                 });
                 raffle.userTickets[buyer].push(currentId);
                 unchecked {
@@ -361,16 +251,13 @@ contract Raffle is IEntropyConsumer, ReentrancyGuard, Ownable {
     {
         RaffleInfo storage raffle = raffles[raffleId];        
         if (!raffle.isActive) revert RaffleNotActive();
-        
-        PackedTicketInfo memory ticketInfo = raffle.ticketOwnersAndPrizes[ticketId];
-        if (ticketInfo.owner != msg.sender) revert TicketNotOwned();
+        if (raffle.ticketOwnersAndPrizes[ticketId].owner != msg.sender) revert TicketNotOwned();
 
         // add the ticket id to the refunded ticket ids array
         raffle.refundedTicketIds.push(ticketId);
         raffle.ticketOwnersAndPrizes[ticketId] = PackedTicketInfo({
             owner: address(0),
-            prizeShare: 0,
-            purchasePrice: 0
+            prizeShare: 0
         });
 
         unchecked {
@@ -378,8 +265,7 @@ contract Raffle is IEntropyConsumer, ReentrancyGuard, Ownable {
             raffle.ticketsAvailable++;
         }
 
-        // Refund the original purchase price
-        IERC20(raffle.ticketToken).transfer(msg.sender, ticketInfo.purchasePrice);
+        IERC20(raffle.ticketToken).transfer(msg.sender, raffle.ticketTokenQuantity);
         emit TicketRefunded(raffleId, msg.sender, ticketId);
     }
 
@@ -686,28 +572,10 @@ contract Raffle is IEntropyConsumer, ReentrancyGuard, Ownable {
         return address(entropy);
     }
 
-    // This method is used to get the owner and prize share of a ticket
-    // It is used for testing purposes
-    function getTicketInfo(uint256 raffleId, uint256 ticketId) external view returns (
-        address owner, 
-        uint96 prizeShare,
-        uint256 purchasePrice
-    ) {
-        RaffleInfo storage raffle = raffles[raffleId];
-        PackedTicketInfo memory ticketInfo = raffle.ticketOwnersAndPrizes[ticketId];
-        return (ticketInfo.owner, ticketInfo.prizeShare, ticketInfo.purchasePrice);
-    }
-
     // Optional: Add function to manually check/update state
     function checkRaffleState(uint256 raffleId) external updateRaffleState(raffleId) {
         // This function only executes the modifier
         // Useful for external contracts that need to ensure state is current
-    }
-
-    // Add function to update pricing contract
-    function setTicketPricing(address _ticketPricing) external onlyOwner {
-        require(_ticketPricing != address(0), "Invalid address");
-        ticketPricing = ITicketPricing(_ticketPricing);
     }
 
 }

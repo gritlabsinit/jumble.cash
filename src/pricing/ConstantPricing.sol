@@ -5,19 +5,19 @@ import "../interfaces/ITicketPricing.sol";
 
 contract ConstantPricing is ITicketPricing {
     function calculatePrice(
-        uint256 _basePrice,
-        uint32 _totalTickets,
-        uint32 _ticketsSold
+        uint256 basePrice,
+        uint32 ,
+        uint32 
     ) external pure returns (uint256) {
-        return _basePrice;
+        return basePrice;
     }
 
     function calculateBatchPrice(
-        uint256 _basePrice,
-        uint32 _totalTickets,
-        uint32 _ticketsSold,
-        uint32 _quantity
+        uint256 basePrice,
+        uint32 ,
+        uint32 ,
+        uint32 quantity
     ) external pure returns (uint256) {
-        return _basePrice * _quantity;
+        return basePrice * quantity;
     }
 }

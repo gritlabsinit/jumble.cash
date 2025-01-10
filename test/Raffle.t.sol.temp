@@ -3,11 +3,9 @@ pragma solidity ^0.8.19;
 
 import {Test, console2} from "forge-std/Test.sol";
 import {Raffle} from "../src/Raffle.sol";
-import {MockERC20} from "../src/MockERC20.sol";
+import {MockERC20} from "./MockERC20.sol";
 
-contract MockRaffle is Raffle {
-    constructor(address _entropyAddress, address _feeCollector, uint256 _feePercentage) Raffle(_entropyAddress, _feeCollector, _feePercentage) {}
-
+contract MockRaffle is Raffle {  
     function _entropyCallback(uint64 sequenceNumber, address provider, bytes32 randomNumber) external override {
         super.entropyCallback(sequenceNumber, provider, randomNumber);
     }
