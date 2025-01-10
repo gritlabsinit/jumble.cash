@@ -8,6 +8,11 @@ export const RaffleABI = [
         "internalType": "address"
       },
       {
+        "name": "_ticketPricing",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
         "name": "_feeCollector",
         "type": "address",
         "internalType": "address"
@@ -63,19 +68,6 @@ export const RaffleABI = [
   },
   {
     "type": "function",
-    "name": "checkRaffleState",
-    "inputs": [
-      {
-        "name": "raffleId",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
     "name": "claimPrize",
     "inputs": [
       {
@@ -122,7 +114,7 @@ export const RaffleABI = [
       {
         "name": "distribution",
         "type": "tuple[]",
-        "internalType": "struct Raffle.TicketDistribution[]",
+        "internalType": "struct IRaffle.TicketDistribution[]",
         "components": [
           {
             "name": "fundPercentage",
@@ -307,6 +299,40 @@ export const RaffleABI = [
   },
   {
     "type": "function",
+    "name": "getTicketInfo",
+    "inputs": [
+      {
+        "name": "raffleId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "ticketId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "owner",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "prizeShare",
+        "type": "uint96",
+        "internalType": "uint96"
+      },
+      {
+        "name": "purchasePrice",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "getUserTickets",
     "inputs": [
       {
@@ -391,6 +417,11 @@ export const RaffleABI = [
     ],
     "outputs": [
       {
+        "name": "raffleId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
         "name": "ticketToken",
         "type": "address",
         "internalType": "address"
@@ -432,6 +463,11 @@ export const RaffleABI = [
       },
       {
         "name": "feeCollected",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "totalPoolTokenQuantity",
         "type": "uint256",
         "internalType": "uint256"
       },
@@ -548,6 +584,32 @@ export const RaffleABI = [
   },
   {
     "type": "function",
+    "name": "setTicketPricing",
+    "inputs": [
+      {
+        "name": "_ticketPricing",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "ticketPricing",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "contract ITicketPricing"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "transferOwnership",
     "inputs": [
       {
@@ -593,6 +655,37 @@ export const RaffleABI = [
         "type": "address",
         "indexed": true,
         "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "PoolPrizeCreated",
+    "inputs": [
+      {
+        "name": "raffleId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "poolIndex",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "poolPrize",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "prizePerWinner",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
       }
     ],
     "anonymous": false
