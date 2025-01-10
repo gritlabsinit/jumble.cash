@@ -5,8 +5,16 @@ import {Test, console2} from "forge-std/Test.sol";
 import {Raffle} from "../src/Raffle.sol";
 import {MockERC20} from "../src/MockERC20.sol";
 
+contract MockRaffle is Raffle {
+    constructor(address _entropyAddress, address _feeCollector, uint256 _feePercentage) Raffle(_entropyAddress, _feeCollector, _feePercentage) {}
+
+    function _entropyCallback(uint64 sequenceNumber, address provider, bytes32 randomNumber) external override {
+        super.entropyCallback(sequenceNumber, provider, randomNumber);
+    }
+}
+
 contract RaffleTest is Test {
-    Raffle public raffle;
+    MockRaffle public raffle;
     MockERC20 public token;
     address public owner;
     address public user1;
@@ -14,6 +22,10 @@ contract RaffleTest is Test {
     address public entropyAddress;
     address public feeCollector;
     uint256 public feePercentage;
+
+    // Add events for testing
+    event RaffleStateUpdated(uint256 indexed raffleId, bool isActive);
+    event RaffleDeclaredNull(uint256 indexed raffleId);
 
     function setUp() public {
         owner = address(this);
@@ -24,7 +36,7 @@ contract RaffleTest is Test {
         feePercentage = 250; // 2.50%
 
         token = new MockERC20();
-        raffle = new Raffle(entropyAddress, feeCollector, feePercentage);
+        raffle = new MockRaffle(entropyAddress, feeCollector, feePercentage);
 
         // Fund test accounts
         token.transfer(user1, 1000 * 10**18);
@@ -65,6 +77,7 @@ contract RaffleTest is Test {
             ,   // minTicketsRequired
             ,   // totalSold
             ,   // availableTickets
+            ,
             ,   // isActive
             ,   // isFinalized
             bool isNull
@@ -88,6 +101,7 @@ contract RaffleTest is Test {
             ,   // endBlock
             ,   // minTicketsRequired
             uint32 totalSold,
+            ,
             ,   // availableTickets
             ,   // isActive
             ,   // isFinalized
@@ -197,6 +211,7 @@ contract RaffleTest is Test {
             ,   // endBlock
             ,   // minTicketsRequired
             uint32 totalSold,
+            ,
             ,   // availableTickets
             ,   // isActive
             ,   // isFinalized
@@ -218,7 +233,7 @@ contract RaffleTest is Test {
         vm.roll(block.number + 101);
         raffle.finalizeRaffle(raffleId);
 
-        (,,,,,,,, bool isNull) = raffle.getRaffleInfo(raffleId);
+        (,,,,,,,,, bool isNull) = raffle.getRaffleInfo(raffleId);
         assertTrue(isNull);
     }
 
@@ -237,6 +252,7 @@ contract RaffleTest is Test {
             ,   // endBlock
             ,   // minTicketsRequired
             uint32 totalSold,
+            ,
             ,   // availableTickets
             ,   // isActive
             ,   // isFinalized
@@ -259,7 +275,7 @@ contract RaffleTest is Test {
         
         // Refund a ticket
         uint256 ticketId = raffle.getUserTickets(raffleId, user1)[0];
-        raffle.refundTicket(raffleId, ticketId);
+        raffle.refundTicket(raffleId, uint32(ticketId));
         // Verify refund
         assertEq(raffle.getUserTickets(raffleId, user1).length, 4);
         
@@ -287,11 +303,118 @@ contract RaffleTest is Test {
         
         uint256[] memory tickets = raffle.getUserTickets(raffleId, user1);
         gasBefore = gasleft();
-        raffle.refundTicket(raffleId, tickets[0]);
+        raffle.refundTicket(raffleId, uint32(tickets[0]));
         uint256 refundGas = gasBefore - gasleft();
         
         // Gas should be reasonable
         assertLt(buyGas, 1000000);
         assertLt(refundGas, 100000);
+    }
+
+    // Test state updates
+    function testRaffleStateUpdate() public {
+        uint256 raffleId = createBasicRaffle();
+        
+        // Move past end block
+        vm.roll(block.number + 101);
+        
+        // Expect state update events
+        vm.expectEmit(true, false, false, true);
+        emit RaffleStateUpdated(raffleId, false);
+        
+        raffle.checkRaffleState(raffleId);
+        
+        (,,,,,,, bool isActive,,) = raffle.getRaffleInfo(raffleId);
+        assertFalse(isActive);
+    }
+
+    function testNullRaffleOnInsufficientTickets() public {
+        uint256 raffleId = createBasicRaffle();
+        
+        // Buy only 1 ticket when minimum is 2
+        vm.startPrank(user1);
+        token.approve(address(raffle), 100 * 10**18);
+        raffle.buyTickets(raffleId, 1);
+        vm.stopPrank();
+        
+        // Move past end block
+        vm.roll(block.number + 101);
+        
+        // Expect both state update and null raffle events
+        vm.expectEmit(true, false, false, true);
+        emit RaffleStateUpdated(raffleId, false);
+        vm.expectEmit(true, false, false, true);
+        emit RaffleDeclaredNull(raffleId);
+        
+        raffle.checkRaffleState(raffleId);
+        
+        (,,,,,,,, bool isFinalized, bool isNull) = raffle.getRaffleInfo(raffleId);
+        assertTrue(isNull);
+    }
+
+    function testWinnerSelection() public {
+        uint256 raffleId = createBasicRaffle();
+        
+        // Buy all tickets
+        vm.startPrank(user1);
+        token.approve(address(raffle), 300 * 10**18);
+        raffle.buyTickets(raffleId, 3);
+        vm.stopPrank();
+        
+        // Move past end block and finalize
+        vm.roll(block.number + 101);
+        raffle.finalizeRaffle(raffleId);
+        
+        // Mock entropy callback
+        vm.prank(entropyAddress);
+        bytes32 randomNumber = bytes32(uint256(1234));
+        raffle._entropyCallback(1, entropyAddress, randomNumber);
+        
+        // Select winners
+        raffle.selectWinners(raffleId);
+        
+        // Verify prize shares are set
+        uint256[] memory userTickets = raffle.getUserTickets(raffleId, user1);
+        for (uint256 i = 0; i < userTickets.length; i++) {
+            // get ticket info
+            (address _owner, uint96 prizeShare) = raffle.getTicketInfo(raffleId, userTickets[i]);
+            assertEq(owner, user1);
+            assertTrue(prizeShare >= 0);
+        }
+    }
+
+    function testClaimPrize() public {
+        uint256 raffleId = createBasicRaffle();
+        
+        // Buy tickets and finalize raffle
+        vm.startPrank(user1);
+        token.approve(address(raffle), 300 * 10**18);
+        raffle.buyTickets(raffleId, 3);
+        vm.stopPrank();
+        
+        vm.roll(block.number + 101);
+        raffle.finalizeRaffle(raffleId);
+        
+        // Mock winner selection
+        vm.prank(entropyAddress);
+        raffle._entropyCallback(1, entropyAddress, bytes32(uint256(1234)));
+        raffle.selectWinners(raffleId);
+        
+        // Claim prize
+        uint256 balanceBefore = token.balanceOf(user1);
+        vm.prank(user1);
+        raffle.claimPrize(raffleId);
+        uint256 balanceAfter = token.balanceOf(user1);
+        
+        assertTrue(balanceAfter > balanceBefore);
+    }
+
+    // Add helper function to get ticket info
+    function getTicketInfo(uint256 raffleId, uint256 ticketId) 
+        external 
+        view 
+        returns (address _owner, uint96 _prizeShare) 
+    {
+        (_owner, _prizeShare) = raffle.getTicketInfo(raffleId, ticketId);
     }
 }
