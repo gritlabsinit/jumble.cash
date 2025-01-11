@@ -104,7 +104,8 @@ export class RaffleSdk {
     async buyTickets(raffleId: number, quantity: number): Promise<TicketsPurchasedEvent | null> {
         try {
             const raffleInfo = await this.raffleContract.getRaffleInfo(raffleId);
-            const totalCost = raffleInfo.ticketTokenQuantity * BigInt(quantity);
+            // provide 2x the ticket token quantity for the total cost
+            const totalCost = BigInt(2) *raffleInfo.ticketTokenQuantity * BigInt(quantity);
 
             // Approve tokens first
             const approveTx = await this.tokenContract.approve(

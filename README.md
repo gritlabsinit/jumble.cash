@@ -63,8 +63,9 @@ jumble_cash/
 ## Deployed Contracts
 
 ### Base Sepolia
-- **Raffle Contract**: [`0x01773C60d9667D5316D9A2A0b6E37E3CA5B46F6f`](https://sepolia.basescan.org/address/0x01773C60d9667D5316D9A2A0b6E37E3CA5B46F6f)
-- **Token Contract**: [`0x3F2c1Dc98E4c6FECEF5276d414382dFD3862b326`](https://sepolia.basescan.org/address/0x3F2c1Dc98E4c6FECEF5276d414382dFD3862b326)
+- **Raffle Contract with Constant Pricing**: [`0x6e2c9086d8dF2Af34577ab5Eb696ab091371a30b`](https://sepolia.basescan.org/address/0x6e2c9086d8dF2Af34577ab5Eb696ab091371a30b)
+- **Raffle Contract with Logistic Pricing**: [`0x3d3cE35930919d98A9e6bC31FFD9E54C7340b64a`](https://sepolia.basescan.org/address/0x3d3cE35930919d98A9e6bC31FFD9E54C7340b64a)
+- **Token Contract**: [`0xf9bbF8E3c62F8EA6383E9FC36163213c1F308535`](https://sepolia.basescan.org/address/0xf9bbF8E3c62F8EA6383E9FC36163213c1F308535)
 
 ## Getting Started
 
