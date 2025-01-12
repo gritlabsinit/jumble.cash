@@ -102,6 +102,7 @@ abstract contract BaseRaffle is IRaffle, IEntropyConsumer, RaffleStorage, Reentr
         if (raffle.hasClaimed[msg.sender]) revert AlreadyClaimed();
 
         uint256 prize = RaffleLib.calculatePrize(
+            msg.sender,
             raffle.userTickets[msg.sender],
             raffle.ticketOwnersAndPrizes
         );
