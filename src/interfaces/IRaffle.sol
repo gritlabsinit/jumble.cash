@@ -39,6 +39,8 @@ interface IRaffle {
     event PoolPrizeCreated(uint256 indexed raffleId, uint256 poolIndex, uint256 poolPrize, uint256 prizePerWinner);
     event WinnersSelected(uint256 indexed raffleId, uint32 validTickets);
     event RaffleStateUpdated(uint256 indexed raffleId, bool isActive);
+    event PrizeClaimedForTicketIds(uint256 indexed raffleId, address indexed winner, uint256 amount, uint256[] ticketIds);
+    event RefundClaimedForTicketIds(uint256 indexed raffleId, address indexed user, uint256 amount, uint256[] ticketIds);
 
     function createRaffle(
         uint32 totalTickets,

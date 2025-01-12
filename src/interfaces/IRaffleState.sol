@@ -27,7 +27,7 @@ interface IRaffleState {
         mapping(address => uint256[]) userTickets;
         mapping(uint256 => IRaffle.PackedTicketInfo) ticketOwnersAndPrizes;
         mapping(address => bool) hasClaimed;
-        mapping(uint256 => bool) isTicketRefunded;
+        mapping(uint256 => bool) isTicketClaimed;
         mapping(uint256 => uint256[]) winningTicketsPerPool;
         uint32[] refundedTicketIds;
 

@@ -69,7 +69,7 @@ abstract contract BaseRaffle is IRaffle, IEntropyConsumer, RaffleStorage, Reentr
             revert InvalidDistribution();
         }
 
-        uint256 raffleId = raffleCounter++;
+        uint256 raffleId = ++raffleCounter;
         RaffleInfo storage raffle = raffles[raffleId];
 
         raffle.raffleId = raffleId;
@@ -114,6 +114,32 @@ abstract contract BaseRaffle is IRaffle, IEntropyConsumer, RaffleStorage, Reentr
         }
     }
 
+    function claimPrizeByTicketIds(uint256 raffleId, uint256[] memory ticketIds) 
+        external 
+        virtual 
+        nonReentrant 
+        updateRaffleState(raffleId) 
+    {
+        RaffleInfo storage raffle = raffles[raffleId];
+        
+        if (!raffle.isFinalized) revert RaffleNotFinalized();
+        if (raffle.isNull) revert RaffleIsNull();
+
+        uint256 prize;
+        for (uint256 i = 0; i < ticketIds.length; i++) {
+            PackedTicketInfo memory ticketInfo = raffle.ticketOwnersAndPrizes[ticketIds[i]];
+            if (ticketInfo.owner == msg.sender && !raffle.isTicketClaimed[ticketIds[i]]) {
+                prize += ticketInfo.prizeShare;
+                raffle.isTicketClaimed[ticketIds[i]] = true;
+            }
+        }
+
+        if (prize > 0) {
+            IERC20(raffle.ticketToken).transfer(msg.sender, prize);
+            emit PrizeClaimedForTicketIds(raffleId, msg.sender, prize, ticketIds);
+        }
+    }
+
     function claimRefund(uint256 raffleId) external virtual nonReentrant {
         RaffleInfo storage raffle = raffles[raffleId];
         
@@ -126,9 +152,9 @@ abstract contract BaseRaffle is IRaffle, IEntropyConsumer, RaffleStorage, Reentr
         uint256 refundAmount;
         for (uint256 i = 0; i < userTicketIds.length;) {
             IRaffle.PackedTicketInfo memory ticketInfo = raffle.ticketOwnersAndPrizes[userTicketIds[i]];
-            if (ticketInfo.owner == msg.sender && !raffle.isTicketRefunded[userTicketIds[i]]) {
+            if (ticketInfo.owner == msg.sender && !raffle.isTicketClaimed[userTicketIds[i]]) {
                 refundAmount += ticketInfo.purchasePrice;
-                raffle.isTicketRefunded[userTicketIds[i]] = true;
+                raffle.isTicketClaimed[userTicketIds[i]] = true;
             }
             unchecked { ++i; }
         }
@@ -136,6 +162,27 @@ abstract contract BaseRaffle is IRaffle, IEntropyConsumer, RaffleStorage, Reentr
         if (refundAmount > 0) {
             raffle.hasClaimed[msg.sender] = true;
             IERC20(raffle.ticketToken).transfer(msg.sender, refundAmount);
+        }
+    }
+
+    function claimRefundByTicketIds(uint256 raffleId, uint256[] memory ticketIds) external virtual nonReentrant {
+        RaffleInfo storage raffle = raffles[raffleId];
+        
+        if (!raffle.isNull) revert RaffleIsNull();
+
+        uint256 refundAmount;
+        for (uint256 i = 0; i < ticketIds.length;) {
+            IRaffle.PackedTicketInfo memory ticketInfo = raffle.ticketOwnersAndPrizes[ticketIds[i]];
+            if (ticketInfo.owner == msg.sender && !raffle.isTicketClaimed[ticketIds[i]]) {
+                refundAmount += ticketInfo.purchasePrice;
+                raffle.isTicketClaimed[ticketIds[i]] = true;
+            }
+            unchecked { ++i; }
+        }
+
+        if (refundAmount > 0) {
+            IERC20(raffle.ticketToken).transfer(msg.sender, refundAmount);
+            emit RefundClaimedForTicketIds(raffleId, msg.sender, refundAmount, ticketIds);
         }
     }
 
@@ -174,6 +221,40 @@ abstract contract BaseRaffle is IRaffle, IEntropyConsumer, RaffleStorage, Reentr
         // Refund the original purchase price
         IERC20(raffle.ticketToken).transfer(msg.sender, ticketInfo.purchasePrice);
         emit TicketRefunded(raffleId, msg.sender, ticketId);
+    }
+
+    function refundTicketsByTicketIds(uint256 raffleId, uint256[] memory ticketIds) external nonReentrant {
+        RaffleInfo storage raffle = raffles[raffleId];
+        
+        uint256 refundAmount;
+        for (uint256 i = 0; i < ticketIds.length;) {
+            IRaffle.PackedTicketInfo memory ticketInfo = raffle.ticketOwnersAndPrizes[ticketIds[i]];
+            if (ticketInfo.owner == msg.sender && !raffle.isTicketClaimed[ticketIds[i]]) {
+                refundAmount += ticketInfo.purchasePrice;
+                // Update the total pool token quantity
+                raffle.totalPoolTokenQuantity -= ticketInfo.purchasePrice;
+
+                // add the ticket id to the refunded ticket ids array
+                uint32 ticketId = uint32(ticketIds[i]);
+                raffle.refundedTicketIds.push(ticketId);
+                raffle.ticketOwnersAndPrizes[ticketIds[i]] = PackedTicketInfo({
+                    owner: address(0),
+                    prizeShare: 0,
+                    purchasePrice: 0
+                });
+
+                unchecked {
+                    raffle.ticketsRefunded++;
+                    raffle.ticketsAvailable++;
+                }
+            }
+            unchecked { ++i; }
+        }
+
+        if (refundAmount > 0) {
+            IERC20(raffle.ticketToken).transfer(msg.sender, refundAmount);
+            emit RefundClaimedForTicketIds(raffleId, msg.sender, refundAmount, ticketIds);
+        }
     }
 
     /**
