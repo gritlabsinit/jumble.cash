@@ -14,17 +14,58 @@ A gas-optimized raffle system built on Ethereum, featuring a Solidity smart cont
 
 ## Project Structure
 
-- `src/Raffle.sol`: The main Raffle contract.
-- `src/MockERC20.sol`: A mock ERC20 token for testing purposes.
-- `test/Raffle.t.sol`: Test cases for the Raffle contract.
-- `jump-cash-sdk/src/raffle-sdk.ts`: TypeScript SDK for interacting with the Raffle contract.
-- `jump-cash-sdk/examples/complete-flow.ts`: Example usage of the SDK.
+```
+jumble_cash/
+├── src/
+│   ├── base/
+│   │   ├── BaseRaffle.sol       # Base raffle implementation
+│   │   └── RaffleStorage.sol    # Storage layout contract
+│   ├── implementations/
+│   │   ├── BatchRaffle.sol      # Batch ticket purchase implementation
+│   │   └── IndividualRaffle.sol # Individual ticket purchase implementation
+│   ├── interfaces/
+│   │   ├── IRaffle.sol          # Main raffle interface
+│   │   ├── IRaffleState.sol     # Raffle state interface
+│   │   └── ITicketPricing.sol   # Ticket pricing interface
+│   └── libraries/
+│       └── RaffleLib.sol        # Shared raffle utilities
+│
+├── jumble-cash-sdk/
+│   ├── src/
+│   │   ├── abis/               # Generated contract ABIs
+│   │   │   ├── BatchRaffle.ts
+│   │   │   └── MockERC20.ts
+│   │   └── raffle-sdk.ts       # TypeScript SDK implementation
+│   └── examples/
+│       └── complete-flow.ts    # SDK usage examples
+│
+├── scripts/
+│   ├── deploy_contracts.sh     # Deployment script
+│   ├── gen_abi.py             # ABI generation script
+│   └── generate-abi-types.ts   # TypeScript ABI type generator
+│
+├── test/
+│   └── Raffle.t.sol           # Contract test suite
+│
+└── README.md
+```
+
+### Key Components
+
+- **Base Contracts**: Core raffle functionality and storage layout
+- **Implementations**: Specific raffle variants (Batch and Individual)
+- **Interfaces**: Contract interfaces and type definitions
+- **Libraries**: Shared utilities and helper functions
+- **SDK**: TypeScript library for contract interaction
+- **Scripts**: Deployment and development utilities
+- **Tests**: Comprehensive test suite
 
 ## Deployed Contracts
 
 ### Base Sepolia
-- **Raffle Contract**: [`0xD769355704aAd471222888dB1B4c2eCEF19e62b9`](https://sepolia.basescan.org/address/0xD769355704aAd471222888dB1B4c2eCEF19e62b9)
-- **Token Contract**: [`0xCa519a5cb8a62ACd3430e4b8e4dcD5BB0D5464BF`](https://sepolia.basescan.org/address/0xCa519a5cb8a62ACd3430e4b8e4dcD5BB0D5464BF)
+- **Raffle Contract with Constant Pricing**: [`0x750a42Da2297780d217948605943523eE764e09c`](https://sepolia.basescan.org/address/0x750a42Da2297780d217948605943523eE764e09c)
+- **Raffle Contract with Logistic Pricing**: [`0xB122abE39a278B908093558419414CDcBe52D968`](https://sepolia.basescan.org/address/0xB122abE39a278B908093558419414CDcBe52D968)
+- **Token Contract**: [`0x7EE7932878d24affC930AcE395c42558b3A8e60d`](https://sepolia.basescan.org/address/0x7EE7932878d24affC930AcE395c42558b3A8e60d)
 
 ## Getting Started
 

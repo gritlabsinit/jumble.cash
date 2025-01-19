@@ -34,7 +34,7 @@ interface SequenceNumberRequestedEvent {
 
 interface WinnersSelectedEvent {
     raffleId: bigint;
-    validTickets: bigint;
+    validTickets: number;
 }
 
 interface TicketRefundedEvent {
@@ -104,7 +104,8 @@ export class RaffleSdk {
     async buyTickets(raffleId: number, quantity: number): Promise<TicketsPurchasedEvent | null> {
         try {
             const raffleInfo = await this.raffleContract.getRaffleInfo(raffleId);
-            const totalCost = raffleInfo.ticketTokenQuantity * BigInt(quantity);
+            // provide 2x the ticket token quantity for the total cost
+            const totalCost = BigInt(2) *raffleInfo.ticketTokenQuantity * BigInt(quantity);
 
             // Approve tokens first
             const approveTx = await this.tokenContract.approve(
@@ -113,7 +114,7 @@ export class RaffleSdk {
             );
             await approveTx.wait();
 
-            // Buy tickets
+            // Buy tickets with uint32 quantity
             const tx = await this.raffleContract.buyTickets(raffleId, quantity);
             const receipt = await tx.wait();
             const event = this.parseEvent(receipt, 'TicketsPurchased');
@@ -237,8 +238,9 @@ export class RaffleSdk {
                 ticketTokenQuantity: info.ticketTokenQuantity,
                 endBlock: info.endBlock,
                 minTicketsRequired: info.minTicketsRequired,
-                totalSold: info.totalSold,
-                availableTickets: info.availableTickets,
+                ticketsRefunded: info.ticketsRefunded,
+                ticketsMinted: info.ticketsMinted,
+                ticketsAvailable: info.ticketsAvailable,
                 isActive: info.isActive,
                 isFinalized: info.isFinalized,
                 isNull: info.isNull
@@ -272,6 +274,20 @@ export class RaffleSdk {
             return await this.raffleContract.getSequenceFees();
         } catch (error) {
             console.error('Error getting sequence fees:', error);
+            throw error;
+        }
+    }
+
+    async getTicketInfo(raffleId: number, ticketId: number) {
+        try {
+            const info = await this.raffleContract.getTicketInfo(raffleId, ticketId);
+            return {
+                owner: info.owner,
+                prizeShare: info.prizeShare,
+                purchasePrice: info.purchasePrice
+            };
+        } catch (error) {
+            console.error('Error getting ticket info:', error);
             throw error;
         }
     }

@@ -1,6 +1,8 @@
 # Compiler files
 cache/
 out/
+abi/
+abi-ts/ 
 
 # Ignores development broadcast logs
 /broadcast
@@ -15,6 +17,7 @@ docs/
 # Dotenv file
 .env
 lib/
+lib/prb-math/
 jumble-cash-sdk/node_modules/
 jumble-cash-sdk/dist/
 jumble-cash-sdk/.env
