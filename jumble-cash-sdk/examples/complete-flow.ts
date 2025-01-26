@@ -24,11 +24,11 @@ async function createRaffle(raffleSdk: RaffleSdk, distribution: any, raffleId: n
 
     if (raffleId == null) {  
         raffleEvent = await raffleSdk.createRaffle(
-            10000, // totalTickets
+            100, // totalTickets
             ethers.parseEther('1'), // 1 token per ticket
             distribution,
-            600, // duration in blocks
-            10 // minTicketsRequired
+            100, // duration in blocks
+            1 // minTicketsRequired
         );
 
         console.log('Created raffle:', {
@@ -46,7 +46,7 @@ async function createRaffle(raffleSdk: RaffleSdk, distribution: any, raffleId: n
 
 async function buyTickets(raffleSdk: RaffleSdk, raffleId: number, ticketQuantity: number) {
     // Buy tickets
-    const batchSize = 50;
+    const batchSize = 5;
     for (let i = 0; i < ticketQuantity; i+=batchSize) {
         try {       
             const purchaseEvent = await raffleSdk.buyTickets(Number(raffleId), batchSize);
@@ -108,16 +108,15 @@ async function main() {
         // Create a new raffle
         const distribution = [
             { fundPercentage: 70, ticketQuantity: 10 },
-            { fundPercentage: 20, ticketQuantity: 500 },
-            { fundPercentage: 5, ticketQuantity: 3000 },
-            { fundPercentage: 5, ticketQuantity: 6490 }
+            { fundPercentage: 20, ticketQuantity: 50 },
+            { fundPercentage: 10, ticketQuantity: 40 },
         ];
 
         // Number of tickets to buy
-        const ticketToBuy = 1000;
+        const ticketToBuy = 30;
 
         // Number of tickets to refund
-        const ticketToRefund = 100;
+        const ticketToRefund = 10;
 
         let raffleId = await createRaffle(raffleSdk, distribution, _raffleId);
 
@@ -125,7 +124,7 @@ async function main() {
 
         await refundTickets(raffleSdk, Number(raffleId), ticketToRefund);
 
-        await buyTickets(raffleSdk, Number(raffleId), 400);
+        await buyTickets(raffleSdk, Number(raffleId), 5);
 
         // Wait for raffle duration
         const raffleInfo = await raffleSdk.getRaffleInfo(Number(raffleId));
