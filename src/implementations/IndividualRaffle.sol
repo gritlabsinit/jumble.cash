@@ -89,4 +89,13 @@ contract IndividualRaffle is BaseRaffle {
         require(assigned == quantity, "Failed to assign all tickets");
         raffle.ticketsAvailable -= quantity;
     }
+
+    function getTicketPrice(uint256 raffleId, uint32 quantity) external view returns (uint256) {
+        RaffleInfo storage raffle = raffles[raffleId];
+        return ticketPricing.calculatePrice(
+            raffle.ticketTokenQuantity,
+            raffle.totalTickets,
+            raffle.ticketsMinted - raffle.ticketsRefunded + quantity - 1
+        );
+    }
 }       

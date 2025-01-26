@@ -292,6 +292,15 @@ export class RaffleSdk {
         }
     }
 
+    async getTicketPrice(raffleId: number, quantity: number) {
+        try {
+            return await this.raffleContract.getTicketPrice(raffleId, quantity);
+        } catch (error) {
+            console.error('Error getting ticket price:', error);
+            throw error;
+        }
+    }
+
     // Helper method to parse events
     private parseEvent(receipt: ethers.ContractTransactionReceipt, eventName: string) {
         return receipt?.logs
