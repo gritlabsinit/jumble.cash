@@ -98,4 +98,13 @@ contract IndividualRaffle is BaseRaffle {
             raffle.ticketsMinted - raffle.ticketsRefunded + quantity - 1
         );
     }
+
+    function getSimulatedTicketPrice(uint256 ticketTokenQuantity, uint32 totalTickets, uint32 ticketsMinted, uint32 quantity) external view returns (uint256) {
+        return ticketPricing.calculateBatchPrice(
+            ticketTokenQuantity,
+            totalTickets,
+            ticketsMinted,
+            quantity
+        );
+    }
 }       

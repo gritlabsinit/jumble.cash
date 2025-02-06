@@ -37,6 +37,7 @@ interface IRaffleState {
         address ticketToken,
         uint96 ticketTokenQuantity,
         uint32 endBlock,
+        IRaffle.TicketDistribution[] memory ticketDistribution,
         uint32 minTicketsRequired,
         uint32 ticketsRefunded,
         uint32 ticketsMinted,
