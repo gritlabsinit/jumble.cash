@@ -283,6 +283,23 @@ export const RaffleABI = [
         "internalType": "uint32"
       },
       {
+        "name": "ticketDistribution",
+        "type": "tuple[]",
+        "internalType": "struct IRaffle.TicketDistribution[]",
+        "components": [
+          {
+            "name": "fundPercentage",
+            "type": "uint96",
+            "internalType": "uint96"
+          },
+          {
+            "name": "ticketQuantity",
+            "type": "uint96",
+            "internalType": "uint96"
+          }
+        ]
+      },
+      {
         "name": "minTicketsRequired",
         "type": "uint32",
         "internalType": "uint32"
@@ -361,6 +378,30 @@ export const RaffleABI = [
       },
       {
         "name": "purchasePrice",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getTicketPrice",
+    "inputs": [
+      {
+        "name": "raffleId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "quantity",
+        "type": "uint32",
+        "internalType": "uint32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
         "type": "uint256",
         "internalType": "uint256"
       }

@@ -237,6 +237,7 @@ export class RaffleSdk {
                 ticketToken: info.ticketToken,
                 ticketTokenQuantity: info.ticketTokenQuantity,
                 endBlock: info.endBlock,
+                ticketDistribution: info.ticketDistribution,
                 minTicketsRequired: info.minTicketsRequired,
                 ticketsRefunded: info.ticketsRefunded,
                 ticketsMinted: info.ticketsMinted,
@@ -301,6 +302,14 @@ export class RaffleSdk {
         }
     }
 
+    async getSimulatedTicketPrice(ticketTokenQuantity: number, totalTickets: number, ticketsMinted: number, quantity: number) {
+        try {
+            return await this.raffleContract.getSimulatedTicketPrice(ticketTokenQuantity, totalTickets, ticketsMinted, quantity);
+        } catch (error) {
+            console.error('Error getting simulated ticket price:', error);
+            throw error;
+        }
+    }
     // Helper method to parse events
     private parseEvent(receipt: ethers.ContractTransactionReceipt, eventName: string) {
         return receipt?.logs
