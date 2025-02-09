@@ -15,6 +15,7 @@ abstract contract RaffleStorage is IRaffleState {
         uint96 ticketTokenQuantity,
         uint32 endBlock,
         IRaffle.TicketDistribution[] memory ticketDistribution,
+        uint32 totalTickets,
         uint32 minTicketsRequired,
         uint32 ticketsRefunded,
         uint32 ticketsMinted,
@@ -29,6 +30,7 @@ abstract contract RaffleStorage is IRaffleState {
             raffle.ticketTokenQuantity,
             raffle.endBlock,
             raffle.ticketDistribution,
+            raffle.totalTickets,
             raffle.minTicketsRequired,
             raffle.ticketsRefunded,
             raffle.ticketsMinted,
@@ -40,7 +42,14 @@ abstract contract RaffleStorage is IRaffleState {
     }
 
     function getUserTickets(uint256 raffleId, address user) external view returns (uint256[] memory) {
-        return raffles[raffleId].userTickets[user];
+        uint256[] memory tickets = raffles[raffleId].userTickets[user];
+        uint256[] memory result = new uint256[](tickets.length);
+        for (uint256 i = 0; i < tickets.length; i++) {
+            if (raffles[raffleId].ticketOwnersAndPrizes[tickets[i]].owner == user) {
+                result[i] = tickets[i];
+            }
+        }
+        return result;
     }
 
     function getWinningTicketsForPool(uint256 raffleId, uint256 poolIndex) external view returns (uint256[] memory) {

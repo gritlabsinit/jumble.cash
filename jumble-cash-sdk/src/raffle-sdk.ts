@@ -238,6 +238,7 @@ export class RaffleSdk {
                 ticketTokenQuantity: info.ticketTokenQuantity,
                 endBlock: info.endBlock,
                 ticketDistribution: info.ticketDistribution,
+                totalTickets: info.totalTickets,
                 minTicketsRequired: info.minTicketsRequired,
                 ticketsRefunded: info.ticketsRefunded,
                 ticketsMinted: info.ticketsMinted,

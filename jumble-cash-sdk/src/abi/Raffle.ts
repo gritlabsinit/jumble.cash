@@ -300,6 +300,11 @@ export const RaffleABI = [
         ]
       },
       {
+        "name": "totalTickets",
+        "type": "uint32",
+        "internalType": "uint32"
+      },
+      {
         "name": "minTicketsRequired",
         "type": "uint32",
         "internalType": "uint32"

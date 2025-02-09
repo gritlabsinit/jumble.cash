@@ -63,10 +63,10 @@ jumble_cash/
 ## Deployed Contracts
 
 ### Base Sepolia
-- **Raffle Contract with Constant Pricing**: [`0x1cf7aEfAe4011396bBa72f5eD8BDfeE8bd36f221`](https://sepolia.basescan.org/address/0x1cf7aEfAe4011396bBa72f5eD8BDfeE8bd36f221)
-- **Raffle Contract with Logistic Pricing**: [`0xE5e98c22008b118F0F3Ee903C8dB241A9dC14358`](https://sepolia.basescan.org/address/0xE5e98c22008b118F0F3Ee903C8dB241A9dC14358)
-- **Token Contract**: [`0xD5cA93794155AB0CfC0aA2b1e6283FCa3BB818fd`](https://sepolia.basescan.org/address/0xD5cA93794155AB0CfC0aA2b1e6283FCa3BB818fd)
-- **Factory Contract**: [`0x6844cA5b79ee055C92f54aeF5bFB01C96793983F`](https://sepolia.basescan.org/address/0x6844cA5b79ee055C92f54aeF5bFB01C96793983F)
+- **Raffle Contract with Constant Pricing**: [`0xeC7743e82bBa1eC43C0800Ca89259ca700cfBDCB`](https://sepolia.basescan.org/address/0xeC7743e82bBa1eC43C0800Ca89259ca700cfBDCB)
+- **Raffle Contract with Logistic Pricing**: [`0x4b6895d9C29439776Eee1621e8B2A6C9E787F248`](https://sepolia.basescan.org/address/0x4b6895d9C29439776Eee1621e8B2A6C9E787F248)
+- **Token Contract**: [`0x762aE8A55736180ab8c94f52E55651c8404f7b08`](https://sepolia.basescan.org/address/0x762aE8A55736180ab8c94f52E55651c8404f7b08)
+- **Factory Contract**: [`0xE647a3b1Cd24DF27ecE1f67D079751dA63ed8227`](https://sepolia.basescan.org/address/0xE647a3b1Cd24DF27ecE1f67D079751dA63ed8227)
 
 ## Getting Started
 
