@@ -80,6 +80,23 @@ async function refundTickets(raffleSdk: RaffleSdk, raffleId: number, ticketQuant
     }
 }
 
+async function refundTicketsByTicketIds(raffleSdk: RaffleSdk, raffleId: number, ticketQuantity: number) {
+    // Refund tickets by ticket ids
+    try {
+        const ticketIds = Array.from({ length: ticketQuantity }, (_, i) => i);
+        const refundEvent = await raffleSdk.refundTicketsByTicketIds(Number(raffleId), ticketIds);
+        console.log('Refunded tickets by ticket ids:', {
+            raffleId: refundEvent?.raffleId.toString(),
+            user: refundEvent?.user,
+            ticketIds: refundEvent?.ticketIds.map(id => id.toString())
+        });
+    } catch (error) {
+        console.error('Error refunding tickets by ticket ids:', error);
+    }
+    
+    await new Promise(resolve => setTimeout(resolve, 1000));    
+}
+
 async function finalizeRaffle(raffleSdk: RaffleSdk, raffleId: number) {
     const finalizationEvent = await raffleSdk.finalizeRaffle(Number(raffleId));
     console.log('Finalized raffle:', {
@@ -122,7 +139,7 @@ async function main() {
 
         await buyTickets(raffleSdk, Number(raffleId), ticketToBuy);
 
-        await refundTickets(raffleSdk, Number(raffleId), ticketToRefund);
+        await refundTicketsByTicketIds(raffleSdk, Number(raffleId), ticketToRefund);
 
         await buyTickets(raffleSdk, Number(raffleId), 5);
 

@@ -43,6 +43,12 @@ interface TicketRefundedEvent {
     ticketId: bigint;
 }
 
+interface RefundClaimedForTicketIdsEvent {
+    raffleId: bigint;
+    user: string;
+    ticketIds: bigint[];
+}
+
 export class RaffleSdk {
     private provider: ethers.Provider;
     private signer: ethers.Signer;
@@ -226,6 +232,28 @@ export class RaffleSdk {
             const decodedError: DecodedError = await this.errorDecoder.decode(error)          
             console.error('Error refunding ticket:', decodedError);
             throw decodedError;
+        }
+    }
+
+    async refundTicketsByTicketIds(raffleId: number, ticketIds: number[]): Promise<RefundClaimedForTicketIdsEvent | null> {
+        try {
+            const tx = await this.raffleContract.refundTicketsByTicketIds(raffleId, ticketIds);
+            const receipt = await tx.wait();
+            const event = this.parseEvent(receipt, 'RefundClaimedForTicketIds');
+            
+            if (!event) {
+                console.warn('RefundClaimedForTicketIds event not found in transaction receipt');
+                return null;
+            }
+
+            return {
+                raffleId: event.args[0],
+                user: event.args[1],
+                ticketIds: event.args[2]
+            };
+        } catch (error) {
+            console.error('Error refunding tickets:', error);
+            throw error;
         }
     }
 
