@@ -43,13 +43,21 @@ abstract contract RaffleStorage is IRaffleState {
 
     function getUserTickets(uint256 raffleId, address user) external view returns (uint256[] memory) {
         uint256[] memory tickets = raffles[raffleId].userTickets[user];
+        // Filter out tickets that are not owned by the user
         uint256[] memory result = new uint256[](tickets.length);
+        uint256 index = 0;
         for (uint256 i = 0; i < tickets.length; i++) {
             if (raffles[raffleId].ticketOwnersAndPrizes[tickets[i]].owner == user) {
-                result[i] = tickets[i];
+                result[index] = tickets[i];
+                index++;
             }
         }
-        return result;
+        // remove the empty slots
+        uint256[] memory filteredResult = new uint256[](index);
+        for (uint256 i = 0; i < index; i++) {
+            filteredResult[i] = result[i];
+        }
+        return filteredResult;
     }
 
     function getWinningTicketsForPool(uint256 raffleId, uint256 poolIndex) external view returns (uint256[] memory) {

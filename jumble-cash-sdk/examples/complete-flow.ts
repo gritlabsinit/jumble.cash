@@ -88,7 +88,7 @@ async function refundTicketsByTicketIds(raffleSdk: RaffleSdk, raffleId: number, 
         console.log('Refunded tickets by ticket ids:', {
             raffleId: refundEvent?.raffleId.toString(),
             user: refundEvent?.user,
-            ticketIds: refundEvent?.ticketIds.map(id => id.toString())
+            ticketIds: refundEvent?.ticketIds
         });
     } catch (error) {
         console.error('Error refunding tickets by ticket ids:', error);
